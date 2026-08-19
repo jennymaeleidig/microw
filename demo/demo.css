@@ -1,0 +1,425 @@
+/* microw v1 demo — consumer stylesheet.
+   Every rule below keys to the mcrw-* class contract (plus the demo's own
+   chrome). The library wrote none of this: it only sets each window's
+   geometry (left/top/width/height) and stacking z-index inline. */
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --chrome: #1f2430;
+  --chrome-text: #e6e9f0;
+  --panel: #ffffff;
+  --panel-text: #1c212b;
+  --accent: #4f7cff;
+  --muted: #8b93a3;
+  --line: #d7dbe3;
+  --shadow: 0 10px 28px rgba(4, 8, 20, 0.35);
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  color: var(--panel-text);
+  background: #0b1120;
+}
+
+/* ——— testing-wizard chrome (the demo's own, not part of the window contract) ——— */
+
+#stage {
+  flex: 0 0 auto;
+  padding: 14px 20px 16px;
+  background: #151a26;
+  color: #e6e9f0;
+  border-bottom: 1px solid #262d3d;
+}
+
+.stage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stage-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.stage-brand-name {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.stage-brand-tag {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stage-counter {
+  color: var(--accent);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stage-title {
+  margin: 10px 0 8px;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.stage-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.stage-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 14px;
+  color: #c7cdd8;
+}
+
+.stage-list li::before {
+  content: "\2610"; /* ballot box */
+  color: var(--accent);
+}
+
+.stage-nav {
+  display: flex;
+  gap: 10px;
+}
+
+.stage-btn {
+  appearance: none;
+  border: 1px solid #313a4c;
+  background: #1d2432;
+  color: #e6e9f0;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.stage-btn:hover {
+  background: #262f42;
+}
+
+.stage-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.stage-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.stage-btn-primary:hover {
+  background: #3d6cff;
+}
+
+/* ——— the desktop root: the consumer contract ——— */
+
+#desktop {
+  position: relative; /* windows are absolutely positioned inside it */
+  isolation: isolate; /* root-scoped stacking (two-level isolation) */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 700px at 80% -10%, #24304a 0%, transparent 60%),
+    radial-gradient(900px 600px at 10% 110%, #1c2a45 0%, transparent 55%),
+    linear-gradient(160deg, #111827 0%, #0b1120 100%);
+}
+
+/* ——— windows ——— */
+
+.mcrw {
+  position: absolute;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  color: var(--panel-text);
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  /* border-box keeps the library's inline width/height equal to the on-screen box */
+  box-sizing: border-box;
+}
+
+.mcrw-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  background: var(--chrome);
+  color: var(--chrome-text);
+  border-radius: 9px 9px 0 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.mcrw-header:active {
+  cursor: grabbing;
+}
+
+.mcrw-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcrw-body {
+  flex: 1 1 auto;
+  padding: 12px 14px;
+  overflow: auto;
+  border-radius: 0 0 9px 9px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.mcrw-body p {
+  margin: 0 0 8px;
+}
+
+.mcrw-body p:last-child {
+  margin-bottom: 0;
+}
+
+.mcrw-body ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.mcrw-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  background: #eef1f6;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+/* header controls */
+
+.mcrw-btn-min,
+.mcrw-btn-max,
+.mcrw-btn-close {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--chrome-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.mcrw-btn-min:hover,
+.mcrw-btn-max:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.mcrw-btn-close:hover {
+  background: #e5484d;
+  color: #fff;
+}
+
+.mcrw-btn-min::before {
+  content: "\2013"; /* en dash */
+}
+
+.mcrw-btn-max::before {
+  content: "\25a1"; /* white square */
+}
+
+.mcrw-btn-close::before {
+  content: "\00d7"; /* multiplication x */
+}
+
+/* resize handles — eight compass zones, direct children of .mcrw */
+
+.mcrw-resize-n,
+.mcrw-resize-s,
+.mcrw-resize-e,
+.mcrw-resize-w {
+  position: absolute;
+  background: rgba(79, 124, 255, 0.22);
+  touch-action: none;
+}
+
+.mcrw-resize-n,
+.mcrw-resize-s {
+  left: 10px;
+  right: 10px;
+  height: 6px;
+}
+
+.mcrw-resize-e,
+.mcrw-resize-w {
+  top: 10px;
+  bottom: 10px;
+  width: 6px;
+}
+
+.mcrw-resize-n {
+  top: -3px;
+  cursor: ns-resize;
+}
+
+.mcrw-resize-s {
+  bottom: -3px;
+  cursor: ns-resize;
+}
+
+.mcrw-resize-e {
+  right: -3px;
+  cursor: ew-resize;
+}
+
+.mcrw-resize-w {
+  left: -3px;
+  cursor: ew-resize;
+}
+
+.mcrw-resize-ne,
+.mcrw-resize-nw,
+.mcrw-resize-se,
+.mcrw-resize-sw {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: rgba(79, 124, 255, 0.5);
+  touch-action: none;
+}
+
+.mcrw-resize-ne {
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
+}
+
+.mcrw-resize-nw {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+
+.mcrw-resize-se {
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+
+.mcrw-resize-sw {
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
+}
+
+.mcrw-resize-n:hover,
+.mcrw-resize-s:hover,
+.mcrw-resize-e:hover,
+.mcrw-resize-w:hover,
+.mcrw-resize-ne:hover,
+.mcrw-resize-nw:hover,
+.mcrw-resize-se:hover,
+.mcrw-resize-sw:hover {
+  background: var(--accent);
+}
+
+/* state classes */
+
+.mcrw-min {
+  display: none; /* the only hiding class */
+}
+
+.mcrw-max {
+  border-radius: 0;
+  border: none;
+}
+
+.mcrw-focused {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow);
+}
+
+/* ——— taskbar ——— */
+
+.mcrw-taskbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  padding: 8px 10px;
+  background: rgba(11, 17, 32, 0.86);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 1000; /* above its root's windows */
+}
+
+.mcrw-taskbar-item {
+  min-width: 120px;
+  max-width: 200px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #dbe1ec;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcrw-taskbar-item:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.mcrw-taskbar-item-focused {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mcrw-taskbar-item-min {
+  opacity: 0.55;
+  font-style: italic;
+}
+
+.mcrw-taskbar-item-max {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}

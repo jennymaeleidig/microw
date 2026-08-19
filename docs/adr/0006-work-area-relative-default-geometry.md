@@ -1,0 +1,3 @@
+# Work-area-relative default geometry
+
+A window created with no geometry defaults to a 4:3 rectangle sized against its root's **work area** — 25% of the work-area width, height = ¾ × width — centered in that work area. This reverses the fork's px-based defaults (`400×300`) because a microw window is always bounded to its root, and the root's size is a consumer property microw cannot know: fixed px would be a 400×300 blob in both a 600px sidebar root and a 3840px canvas root, while a work-area fraction scales with the container. Geometry _options_ remain numeric px — only the defaults are relative, so the contract stays predictable ("width 25%" is a default, not a unit system). `minWidth`/`minHeight` default unset: no clamp unless the consumer sets one.

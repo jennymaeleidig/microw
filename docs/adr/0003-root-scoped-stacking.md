@@ -1,0 +1,3 @@
+# Root-scoped stacking (two-level isolation)
+
+Stacking is scoped per root: roots establish a stacking context (`isolation: isolate`), windows z-order within their root by MRU in the band `[1, 999]`, and the taskbar sits above its root's windows (reference `z-index: 1000`); cross-root overlap orders by root composition, and focus never re-stacks across roots. A global z-band was rejected because it only holds when consumer roots create no stacking contexts (any `transform`/`filter`/`z-index`/`will-change` silently breaks it), while declared root isolation is structural. Saturation (999 live windows in one root) is documented as a tie — no re-basing.

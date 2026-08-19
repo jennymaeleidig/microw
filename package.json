@@ -1,0 +1,59 @@
+{
+  "name": "microw",
+  "version": "0.1.0",
+  "description": "Zero-dependency, headless, framework-agnostic window management microframework.",
+  "license": "CC0-1.0",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "window",
+    "windows",
+    "window-manager",
+    "desktop",
+    "popup",
+    "draggable",
+    "resizable",
+    "headless",
+    "microframework"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && tsc -p tsconfig.types.json && node -e \"require('node:fs').writeFileSync('dist/cjs/package.json', JSON.stringify({ type: 'commonjs' }, null, 2) + '\\n')\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "demo": "npm run build && node scripts/serve-demo.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify:dist": "node scripts/verify-dist.mjs",
+    "verify:types": "tsc -p scripts/types-consumer/tsconfig.json",
+    "verify:framework": "node scripts/verify-framework.mjs",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test && npm run verify:dist && npm run verify:types"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

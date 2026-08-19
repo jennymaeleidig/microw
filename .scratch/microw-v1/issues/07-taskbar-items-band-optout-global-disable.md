@@ -1,0 +1,25 @@
+# 07 — Taskbar: items, work-area band, opt-out, global disable
+
+**What to build:** `MicroW.taskbar(root, options)` mounts a headless taskbar that lists that root's windows — one stable item each, restore/focus on click — and reserves its strip so no window ever sits under or over it, with a per-window opt-out and a library-level global disable so non-minimizing apps aren't forced into it.
+
+**Blocked by:** 02 — Constructor, mount, DOM contract, work-area defaults, registry; 03 — moveTo + header drag + pointer conversion + position clamp; 05 — State: minimize / maximize / restore / focus / MRU; 06 — Close / destroy / destroyAll.
+
+**Status:** resolved
+
+- [x] `MicroW.taskbar(root, options)` mounts a `.mcrw-taskbar` as a window sibling, listing one `.mcrw-taskbar-item` per minimizable live window of that root with its title and state classes; items are in creation order and never reorder on focus — the `mcrw-taskbar-item-focused` highlight moves in place.
+- [x] Clicking a `min`/`max` item calls `restore()`; clicking a `normal` item calls `focus()`; closing a window collapses its item's gap while preserving the rest's creation order, and new windows append.
+- [x] The taskbar reserves its side of the root as the work area (measured live per event), so windows re-clamp to the reduced area on mount and on item add/remove; `getState().workArea` reflects the reservation — an empty bar reserves nothing, and the bar takes no size option (the band is the bar's live rect).
+- [x] `side` (bottom/top/left/right), `grow`, and `align` set the documented class hooks on the bar (present iff configured) so consumers position and style it in their own CSS; the bar stacks above its root's windows (reference `z-index: 1000`; a root's window band saturating at [1,999] is a documented tie, no re-basing).
+- [x] A per-window `taskbar: false` opt-out gives that window no item; ADR-0005 is amended to document that such a window is non-minimizable (its `minimize()` is a no-op), so no window can be stranded without a restore affordance.
+- [x] `MicroW.configure({ taskbar: false })` globally disables the taskbar: it strips the min control from every header, turns `minimize()` into a no-op, restores any `min` windows to `normal`, and makes `MicroW.taskbar(root)` create nothing.
+- [x] `taskbar.destroy()` removes the bar and re-clamps the root's windows back to the full root's work area.
+
+## Answer
+
+The taskbar lands as one slice built on the registry's existing hooks. `MicroW.taskbar(root, options)` returns a `Taskbar` instance (a `.mcrw-taskbar` mounted in the root as a window sibling) with `destroy()`. A new `onChange`/`notifyChange` channel fires on window register/unregister and on every state/focus transition (`focus`, `minimize`, `maximize`, `restore`), and the taskbar subscribes to it to reconcile its item list in creation order — one `.mcrw-taskbar-item` per minimizable live window (title text, `-min`/`-max` state classes, `-focused` following focus in place; items never reorder, close collapses the gap, new windows append). Item clicks map `min`/`max` → `restore()`, `normal` → `focus()`.
+
+The work area is now band-aware: `setTaskbarBand(root, side, reader)` registers the bar's live rect (measured per event via `getBoundingClientRect`, border-corrected to the padding edge), and `measureWorkArea` subtracts it on the configured side — an empty bar (zero items) or a zero-extent rect reserves nothing. `getState().workArea` reflects the reservation; `Taskbar.destroy()` clears the band and re-clamps back to the full root. A new `MicroW#reclamp()` shrinks oversized normal windows to fit and re-fits `max` windows both directions, firing `onmove`/`onresize` only when geometry actually changed; the taskbar re-clamps on mount, item add/remove, and destroy.
+
+`side`/`grow`/`align` emit their class hooks only when configured (present iff configured) — an unconfigured bar carries just `mcrw-taskbar`; `side` still defaults to `bottom` for the band reservation, out-of-axis `grow` falls back to the in-axis default, and invalid `side`/`align` values throw a `TypeError`. The bar writes no inline styling — its `z-index: 1000` stays reference consumer CSS. A per-window `taskbar: false` opt-out gives no item and makes `minimize()` a no-op (`minimizable` = a min control is present in the DOM ∧ taskbar opt-in ∧ global enable), matching ADR-0005, which already documents the opt-out and global disable; because the min control's DOM presence is the truth, a window stripped by the global disable stays non-minimizable even after a re-enable. `MicroW.configure({ taskbar: false })` strips the min control from every header, restores any `min` windows, makes `minimize()` a no-op, makes `taskbar()` create nothing, and destroys any existing taskbar so no taskbar CSS classes remain. 25 tests cover the slice in `test/taskbar.test.ts`.
+
+Notes for later tickets: `MicroW#reclamp()` and the live-band measurement are the hooks 09 (root/viewport resize re-clamp) and 08 (cascade re-placement on work-area change) build on; per-frame coalescing of re-clamp callbacks is deferred to 09.

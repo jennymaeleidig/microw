@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>microw v1 — user-testing demo</title>
+    <link rel="stylesheet" href="./demo.css" />
+  </head>
+  <body>
+    <section id="stage" aria-label="Testing wizard">
+      <div class="stage-head">
+        <div class="stage-brand">
+          <span class="stage-brand-name">microw v1</span>
+          <span class="stage-brand-tag">user-testing demo</span>
+        </div>
+        <div class="stage-counter" id="stage-counter"></div>
+      </div>
+      <h1 class="stage-title" id="stage-title"></h1>
+      <ul class="stage-list" id="stage-list"></ul>
+      <nav class="stage-nav">
+        <button id="stage-prev" type="button" class="stage-btn">Back</button>
+        <button
+          id="stage-next"
+          type="button"
+          class="stage-btn stage-btn-primary"
+        >
+          Next
+        </button>
+      </nav>
+    </section>
+    <main id="desktop" aria-label="Desktop root"></main>
+    <script type="module" src="./demo.js"></script>
+  </body>
+</html>
