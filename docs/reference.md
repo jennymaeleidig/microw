@@ -349,8 +349,8 @@ when it closes.
 | `x`, `y`      | `number`                    | centered in the work area                      | container-relative position                        |
 | `width`       | `number`                    | 25% of work-area width                         | window width                                       |
 | `height`      | `number`                    | ¾ × `width` (4:3)                              | window height                                      |
-| `minWidth`    | `number`                    | unset                                          | soft minimum width (the work area wins)            |
-| `minHeight`   | `number`                    | unset                                          | soft minimum height (the work area wins)           |
+| `minWidth`    | `number`                    | —                                              | soft minimum width (the work area wins)            |
+| `minHeight`   | `number`                    | —                                              | soft minimum height (the work area wins)           |
 | `title`       | `string`                    | —                                              | header title text                                  |
 | `html`        | `string`                    | —                                              | body inner HTML                                    |
 | `controls`    | `{ left, right }`           | `{ left: [], right: ["min", "max", "close"] }` | header controls, each over `min` / `max` / `close` |
