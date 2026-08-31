@@ -210,7 +210,22 @@ describe("MicroW global listeners: state", () => {
     win.restore();
 
     expect(states).toEqual(["min", "normal", "max", "normal"]);
-    void win;
+  });
+
+  it("the min-to-max restore path fires one transition carrying max", () => {
+    const r = root();
+    const states: Array<string> = [];
+    tracked(() =>
+      MicroW.onState((_win, snapshot) => states.push(snapshot.state)),
+    );
+
+    const win = new MicroW({ root: r });
+    win.maximize();
+    win.minimize(); // preMin is max
+    win.restore(); // lands on max, not normal
+
+    expect(states).toEqual(["max", "min", "max"]);
+    expect(win.getState().state).toBe("max");
   });
 
   it("the listener receives the window and its settled snapshot", () => {
@@ -242,11 +257,14 @@ describe("MicroW global listeners: state", () => {
     });
     win.minimize();
     win.restore();
+    win.maximize();
 
     expect(order).toEqual([
       "option:minimize",
       "global",
       "option:restore",
+      "global",
+      "option:maximize",
       "global",
     ]);
   });

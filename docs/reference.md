@@ -557,7 +557,7 @@ library's reactions (projection, taskbar), then your global listener. The
 `onCreate` listener sees the window registered and mounted; the `onClose`
 listener runs after the window has left the registry; the `onState`
 listener receives the settled snapshot (equal to `getState()` at listener
-time), and a no-op transition — an already-minimized window asked to
+time, computed once at emit), and a no-op transition — an already-minimized window asked to
 minimize, a gated window — fires nothing. `destroyAll()` fires
 the same per-window sequence as individual `destroy()` calls.
 
