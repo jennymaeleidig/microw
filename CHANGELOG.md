@@ -15,7 +15,7 @@
   at the next reaction.
 
 - **Refactor: cascade re-placement consolidated into `cascade.ts`
-  (ticket "05 — consolidate cascade re-placement").****
+  (ticket "05 — consolidate cascade re-placement").**
   Placement policy — slots, rolls, ownership, re-placement, and the
   work-area watcher — now reads in one file, behind two interfaces:
   "place this window" (`placeWindow`) and "re-place the windows you own"
@@ -37,6 +37,23 @@
   construction and unregisters on destroy. `microw.ts` no longer imports
   `taskbar.ts` for hand-off (the statics' facade import stays); behaviour is
   unchanged, and new seam-level tests pin the ordering.
+
+- **Refactor: the Control gets a model home (ticket "02 — give the Control a
+  model home", Way B — active projection).** `src/controls.ts` is the single
+  writer of state exposure: the header control buttons, the window's state
+  classes, the max control's `aria-pressed`, and every registered taskbar
+  item's `aria-expanded` / `aria-controls` and state classes. State
+  transitions hand projection one `emitState()` call; identity (item text,
+  `-focused`) stays the taskbar's to write. `control-state.ts` and the
+  state-class/`stripMin` helpers are deleted; `minimizable` is a model
+  question (`minButton !== null`), not a DOM query.
+
+- **Refactor: the global taskbar flag folded into MicroW (ticket "03 —
+  delete config.ts").** `config.ts` is gone; the taskbar-enabled flag is
+  MicroW's private static, and ticket 02's config-change channel is replaced
+  by a direct `controlsOf(win).disableMin()` call inside `MicroW.configure`'s
+  disable loop — no import cycle, no hidden chain. `labels.ts` deliberately
+  kept (two real consumers). Behaviour unchanged.
 
 - **Refactor: one geometry-and-callback writer.** `moveTo`, `resizeFrom`,
   `reclamp`, and cascade re-placement all route placement through a single
