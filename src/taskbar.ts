@@ -60,6 +60,10 @@ export function destroyTaskbars(): void {
   }
 }
 
+export function taskbarElementOf(root: HTMLElement): HTMLElement | undefined {
+  return taskbars.get(root)?.element;
+}
+
 export class Taskbar {
   readonly root: HTMLElement;
   readonly element: HTMLElement;

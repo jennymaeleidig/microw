@@ -457,4 +457,14 @@ describe("MicroW window role, name, and focusability", () => {
     win.element.focus();
     expect(seam.document.activeElement).toBe(win.element);
   });
+
+  it("rejects a non-element fallbackFocus", () => {
+    expect(
+      () =>
+        new MicroW({
+          root: root(),
+          fallbackFocus: "not-an-element" as unknown as HTMLElement,
+        }),
+    ).toThrow(TypeError);
+  });
 });

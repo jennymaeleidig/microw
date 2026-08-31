@@ -24,7 +24,7 @@ import {
   unregister,
   windowsOf,
 } from "./registry.js";
-import { createTaskbar, destroyTaskbars } from "./taskbar.js";
+import { createTaskbar, destroyTaskbars, taskbarElementOf } from "./taskbar.js";
 import type { Taskbar } from "./taskbar.js";
 import type {
   CascadeOptions,
@@ -111,6 +111,7 @@ export class MicroW {
   private readonly onclose: WindowEventCallback | undefined;
   private readonly onfocus: WindowEventCallback | undefined;
   private readonly onblur: WindowEventCallback | undefined;
+  private readonly fallbackFocus: HTMLElement | undefined;
   private preMax: Rect | undefined;
   // Restore needs to know whether a minimized window was max or normal.
   private preMin: Exclude<WindowState, "min"> | undefined;
@@ -168,6 +169,13 @@ export class MicroW {
     this.onclose = options.onclose;
     this.onfocus = options.onfocus;
     this.onblur = options.onblur;
+    if (
+      options.fallbackFocus !== undefined &&
+      !isElement(options.fallbackFocus)
+    ) {
+      throw new TypeError("MicroW: `fallbackFocus` must be a DOM element");
+    }
+    this.fallbackFocus = options.fallbackFocus;
 
     const doc = this.root.ownerDocument;
     this.element = doc.createElement("div");
@@ -318,6 +326,9 @@ export class MicroW {
   }
 
   focus(): this {
+    // Model focus directs DOM focus one-way (ADR-0010). Runs even when the
+    // model is already focused, so drifted DOM focus is recaptured.
+    this.element.focus({ preventScroll: true });
     if (this.focused) {
       return this;
     }
@@ -529,7 +540,15 @@ export class MicroW {
     const next = mruOf(this.root).find(
       (win) => win !== this && win.state !== "min",
     );
-    next?.focus();
+    if (next !== undefined) {
+      next.focus();
+      return;
+    }
+    // No window can take focus: fall to the taskbar (the restore affordance,
+    // focusable once ticket 05 gives it tabindex="-1"), then the consumer's
+    // fallbackFocus, else a documented no-op.
+    const target = taskbarElementOf(this.root) ?? this.fallbackFocus;
+    target?.focus({ preventScroll: true });
   }
 
   private toggleMax(): void {

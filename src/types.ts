@@ -87,6 +87,7 @@ export interface MicroWOptions {
   controls?: ControlsOptions;
   resizable?: boolean;
   taskbar?: boolean;
+  fallbackFocus?: HTMLElement;
   class?: string;
   id?: string;
   oncreate?: WindowEventCallback;
