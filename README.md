@@ -45,6 +45,8 @@ A window mounts at construction: a `.mcrw` element is appended to the root, read
 
 microw renders **structure only**. It writes dynamic geometry (`left` / `top` / `width` / `height`) and the stacking `z-index` onto each window, and nothing else. Everything visual is consumer CSS, keyed to the `mcrw-*` class contract.
 
+**Accessibility.** The library ships WCAG Level A semantics for the DOM it creates: windows are named `role="dialog"` containers, header controls and taskbar items are real `<button>`s with labels, the header is a keyboard tab stop (arrow keys move, Alt+arrow keys resize), and model focus drives real DOM focus with a taskbar/`fallbackFocus` safety net — all copy flows through one `MicroW.setControlLabels()` call. You own five things: `:focus-visible` styling, treating `mcrw-focused` as visual-only, composing non-drag affordances from `moveTo`/`resizeFrom`, the native-button reset when mapping retro-CSS cultivars, and localizing via `setControlLabels`. Full details: [**the Accessibility contract**](docs/reference.md#2-the-accessibility-contract) in docs/reference.md.
+
 ### Structure
 
 | Class                                               | Role                                                        |
@@ -95,6 +97,7 @@ All options are optional.
 | `controls`                                                                          | `{ left, right }`     | `{ left: [], right: ["min", "max", "close"] }` | header controls                                                    |
 | `resizable`                                                                         | `boolean`             | `true`                                         | add handles or the `mcrw-no-resize` gate                           |
 | `taskbar`                                                                           | `boolean`             | `true`                                         | `false` opts this window out (and makes it non-minimizable)        |
+| `fallbackFocus`                                                                     | `HTMLElement`         | —                                              | receives stranded DOM focus when no window and no taskbar can      |
 | `class`, `id`                                                                       | `string`              | —                                              | passed onto the `.mcrw` element                                    |
 | `oncreate`, `onmaximize`, `onminimize`, `onrestore`, `onclose`, `onfocus`, `onblur` | `(win) => void`       | —                                              | lifecycle callbacks                                                |
 | `onmove`, `onresize`                                                                | `(win, rect) => void` | —                                              | geometry callbacks, receive the full new `{ x, y, width, height }` |
@@ -109,9 +112,9 @@ All chainable (return the instance) unless noted.
 - `moveTo(x, y)` — move programmatically (no-op outside `normal`).
 - `resizeTo(width, height)` — resize to an absolute size.
 - `resizeFrom(dir, { dx, dy })` — resize from one of the eight directions.
-- `focus()` — make this the focused, topmost window.
+- `focus()` — make this the focused, topmost window; moves real DOM focus to the container (one-way — DOM focus never feeds back into the model).
 - `getState()` — read live state (below).
-- `destroy()` — remove the window, its registry entry, and its taskbar item; hands focus to the next MRU window.
+- `destroy()` — remove the window, its registry entry, and its taskbar item; hands focus to the next MRU window, or the taskbar/`fallbackFocus` fallback chain.
 
 Readonly properties: `root`, `element`, and `minimizable`.
 
@@ -134,11 +137,12 @@ Readonly properties: `root`, `element`, and `minimizable`.
 - `MicroW.windows(root?)` — the live windows of a root (or every window when no root is given).
 - `MicroW.destroyAll()` — destroy every window and return the count.
 - `MicroW.configure({ taskbar: false })` — disable minimize/taskbar globally; restores any minimized windows rather than stranding them.
+- `MicroW.setControlLabels({ min, max, close, moveHint, taskbarLabel, untitledWindow })` — set all accessibility copy in one call (English defaults, partial merges, read at render time).
 - `MicroW.cascade({ root?, mode })` — auto-place new windows in `"cascade"` (stepped staircase) or `"random"` (seeded) slots. Default placement only: a window you position explicitly is never rearranged.
 
 ## The taskbar
 
-`MicroW.taskbar(root, { side, grow, align })` mounts a `.mcrw-taskbar` as a sibling of the windows in the root. It lists one `.mcrw-taskbar-item` per minimizable live window, in creation order, with `mcrw-taskbar-item-min` / `-max` state classes and `mcrw-taskbar-item-focused` tracking focus in place. Clicking a minimized item restores it; clicking a normal or maximized item focuses it. The bar reserves its side of the root as the work area, so windows never sit behind it.
+`MicroW.taskbar(root, { side, grow, align })` mounts a `.mcrw-taskbar` as a sibling of the windows in the root — a labeled group (`role="group"`, `tabindex="-1"`, so it can receive stranded focus). It lists one `.mcrw-taskbar-item` per minimizable live window — native buttons named by the window's title, exposing `aria-expanded` and `aria-controls` — in creation order, with `mcrw-taskbar-item-min` / `-max` state classes and `mcrw-taskbar-item-focused` tracking focus in place. Clicking a minimized item restores it; clicking a normal or maximized item focuses it. The bar reserves its side of the root as the work area, so windows never sit behind it.
 
 The class hooks are `mcrw-taskbar-bottom/-top/-left/-right`, `mcrw-taskbar-grow-right/-left/-down/-up`, and `mcrw-taskbar-align-start/-center/-end`; one of each is always present, defaulting to `bottom`, the axis default (`right`/`down`), and `start`. Positioning and appearance are yours — for example, a bottom bar growing right:
 

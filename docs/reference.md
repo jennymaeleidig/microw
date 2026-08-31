@@ -2,7 +2,8 @@
 
 The complete microw contract, in one place. This is the document to read end to
 end when integrating microw: the `mcrw-*` class contract, the root-geometry and
-work-area rules, the state model, the taskbar's class hooks, and the full API
+work-area rules, the state model, the taskbar's class hooks, the accessibility
+contract, and the full API
 surface.
 
 The [README](../README.md) is the entry point — install, quick start, and a
@@ -20,7 +21,7 @@ dynamic values onto each window's `style` attribute:
 
 Everything visual is consumer CSS, keyed to the `mcrw-*` class contract. The
 only styling the library _requires_ you to write is the root contract (see
-[Root geometry](#2-root-geometry-and-work-area)) plus `position: absolute` and
+[Root geometry](#3-root-geometry-and-work-area)) plus `position: absolute` and
 `isolation: isolate` on `.mcrw` — those two are structural, so the library
 leaves them to you rather than repeating them inline.
 
@@ -29,11 +30,11 @@ leaves them to you rather than repeating them inline.
 A window's DOM is:
 
 ```
-.mcrw                                        window root; position: absolute in its root
-├── .mcrw-header                             the drag surface
-│   ├── .mcrw-btn-* …                        enabled left controls, in configured order
+.mcrw                                        window root; role="dialog", tabindex="-1"; position: absolute in its root
+├── .mcrw-header                             the drag surface; the window's single keyboard tab stop (tabindex="0")
+│   ├── .mcrw-btn-* …                        enabled left controls, in configured order — native buttons
 │   ├── .mcrw-title                          the title text
-│   └── .mcrw-btn-* …                        enabled right controls, in configured order
+│   └── .mcrw-btn-* …                        enabled right controls, in configured order — native buttons
 ├── .mcrw-body                               the content area
 └── .mcrw-resize-n/-e/-s/-w/-ne/-nw/-se/-sw  the eight resize handles (present iff resizable)
 ```
@@ -62,18 +63,21 @@ convenience; it carries no behavior and you may restyle or hide it freely. Only
 **Controls.** The three controls are `min`, `max`, and `close`. A control is
 structural _iff_ it is enabled; a disabled control is simply absent from the
 DOM. Controls are arranged per side via the `controls` option (see
-[Construction](#construction)). The `min` control is also omitted when the
-taskbar is globally disabled. An unknown control name throws a `TypeError`.
+[Construction](#construction)). Controls are native `<button type="button">`
+elements carrying `aria-label`s from the labels bag (see
+[The accessibility contract](#2-the-accessibility-contract)). The `min`
+control is also omitted when the taskbar is globally disabled. An unknown
+control name throws a `TypeError`.
 
 **State classes.** The library toggles these; `normal` carries no class — the
 base `.mcrw` rules _are_ normal styling:
 
-| Class            | Meaning                                                                    |
-| ---------------- | -------------------------------------------------------------------------- |
-| `mcrw-min`       | minimized — the only hiding class; hide it with your CSS                   |
-| `mcrw-max`       | maximized (fills the work area)                                            |
-| `mcrw-focused`   | the focused window (see [Focus](#focus))                                   |
-| `mcrw-no-resize` | resize disabled — added by `resizable: false`, or applied by you as a gate |
+| Class            | Meaning                                                                             |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| `mcrw-min`       | minimized — the only hiding class; hide it with your CSS                            |
+| `mcrw-max`       | maximized (fills the work area)                                                     |
+| `mcrw-focused`   | the focused window — visual-only; semantic focus is DOM focus (see [Focus](#focus)) |
+| `mcrw-no-resize` | resize disabled — added by `resizable: false`, or applied by you as a gate          |
 
 **The resize gate.** `resizable: true` (the default) mounts the eight handles;
 `resizable: false` omits them and adds `mcrw-no-resize`. The class also works as
@@ -81,7 +85,72 @@ a consumer-applied behavior gate: if you add `mcrw-no-resize` yourself (say,
 from a media query), the handles stay in the DOM but the library checks the
 class at drag time and refuses to resize.
 
-## 2. Root geometry and work area
+## 2. The accessibility contract
+
+v1.1 ships WCAG Level A conformance for the DOM the library creates. Windows
+are named, role-correct dialogs: the container is `role="dialog"` with
+`tabindex="-1"`, named by its visible title (`aria-labelledby` → the
+`.mcrw-title` element's auto-assigned `mcrw-title-N` id) or — when title-less —
+by `aria-label` from the `untitledWindow` label. Auto-assigned ids
+(`mcrw-title-N`, and `mcrw-win-N` on minimizable windows for taskbar
+`aria-controls`) fill gaps only: a consumer-supplied `id` always wins. Header
+controls and taskbar items are native `<button type="button">` elements —
+tab-reachable, activated by Enter/Space, with no key handling added by the
+library — and the max control exposes `aria-pressed` while its label stays the
+constant "Maximize".
+
+The `.mcrw-header` is the window's single keyboard tab stop (`tabindex="0"`):
+focused there, the arrow keys move the window in 10 px steps (Shift: 100 px)
+and
+Alt+arrow keys resize it from its bottom-right corner — clamped, gated, and
+callback-fired exactly like pointer drags, through the same public
+`moveTo`/`resizeFrom` APIs. Its accessible name pairs identity with the
+affordance: `"{title}. {moveHint}"`.
+
+Model focus directs DOM focus one-way
+([ADR-0010](adr/0010-model-focus-directs-dom-focus.md)): `focus()` moves real
+DOM focus to the container with scrolling suppressed, and a minimize/close
+hand-off with no window to receive it falls to the root's taskbar element,
+then to the window's `fallbackFocus` option, then does nothing. DOM focus
+never feeds back into the model.
+
+Five responsibilities stay with you — the consumer side of the conformance
+deal:
+
+1. **Focus-visible styling.** The library ships zero CSS, so focus indication
+   is yours: style `:focus-visible` on `.mcrw` (the focused container), the
+   `.mcrw-header` tab stop, `.mcrw-btn-*` controls, `.mcrw-taskbar`, and
+   `.mcrw-taskbar-item` — plus any element you supply as a `fallbackFocus`
+   target. Without it, keyboard users cannot see where they are.
+2. **`mcrw-focused` is visual-only.** Semantic focus is real DOM focus on the
+   container (ADR-0010); the class is a styling channel for your CSS, not an
+   announcement. Don't derive behavior from it.
+3. **Non-drag affordances.** Anything beyond the built-in drag, resize, and
+   header keyboard support — snapping, tiling, custom movers — must be
+   composed from the public `moveTo()`/`resizeFrom()`, so it stays reachable
+   without a pointer (WCAG 2.5.7, Dragging Movement).
+4. **The native-button reset.** Because controls and taskbar items are real
+   buttons, user-agent button styling applies until you neutralize it, keyed
+   to `.mcrw-btn-*` and `.mcrw-taskbar-item`. A reset is **required before**
+   system.css- or classicy-tier cultivar mapping (they ship no bare-`button`
+   rule, so UA `padding` / `font` / `box-sizing` leak through their scoped
+   selectors) and **unnecessary** where the source library resets `button`
+   globally (98.css, 7.css, XP.css — whose inverse hazard is that microw's
+   buttons inherit the library's form push-button look wherever the title-bar
+   scope doesn't reach, so keep the controls inside the library's scoped
+   wrapper, e.g. `title-bar-controls` on `.mcrw-header`). `aria-label` on the
+   controls is mandatory in every mapping — microw supplies it from the
+   labels bag; never strip it. microw ships no reset — the reset belongs to
+   your CSS, keeping the zero-CSS contract intact.
+5. **`setControlLabels` is the i18n surface.** Every string microw renders
+   for accessibility — the control names ("Minimize", "Maximize", "Close"),
+   the header move hint, the taskbar's group label, and the untitled-window
+   fallback — is read from one global bag:
+   `MicroW.setControlLabels({ min, max, close, moveHint, taskbarLabel, untitledWindow })`.
+   English defaults ship, a call merges over them, and labels are read at
+   render time.
+
+## 3. Root geometry and work area
 
 ### Root requirements
 
@@ -120,7 +189,7 @@ runtime CSS police.
 
 The work area is the region of the root available to windows: the root's
 padding box (`clientWidth` × `clientHeight`) minus the band reserved by a
-mounted taskbar (see [The taskbar](#4-the-taskbar)). It is measured live per
+mounted taskbar (see [The taskbar](#5-the-taskbar)). It is measured live per
 event, never cached, so a taskbar's current rect is always reflected.
 
 ### The invariant
@@ -129,11 +198,11 @@ A window is **always wholly inside its work area**. Drag and resize clamp to it;
 maximize fills it; a window created larger than the work area shrinks to fit.
 When the root or the viewport resizes, every window re-clamps into the (new)
 work area — `max` windows re-fit it, `min` windows are left untouched, and
-library-owned cascade windows re-place (see [Cascade](#5-cascade)). The
+library-owned cascade windows re-place (see [Cascade](#6-cascade)). The
 re-clamp fires `onmove` / `onresize` coalesced to at most once per window per
 frame.
 
-## 3. State model
+## 4. State model
 
 ### States
 
@@ -149,11 +218,14 @@ state: minimize is the only way a window leaves view.
 
 ### Focus
 
-Focus is model state, never real DOM focus: the focused window is topmost in
-its root and its taskbar item is highlighted. A newly created window mounts on
-top but is not focused until something focuses it. Because focus is orthogonal
-to the three states, a minimized or maximized window can still be the focused
-one.
+Focus is model state, and model focus directs DOM focus one-way
+([ADR-0010 — model focus directs DOM focus](adr/0010-model-focus-directs-dom-focus.md)):
+the focused window is topmost in its root, its container holds real DOM focus
+(`focus({ preventScroll: true })` — the container is `tabindex="-1"`), and
+consumer-driven DOM focus changes never feed back into the model. A newly
+created window mounts on top but is not focused until something focuses it.
+Because focus is orthogonal to the three states, a minimized or maximized
+window can still be the focused one.
 
 ### Transitions
 
@@ -161,7 +233,9 @@ one.
 untouched, **remembers the state it left** (`normal` or `max`), and fires
 `onminimize`. If the window was focused, it blurs (`onblur`) and hands focus to
 the next most-recently-used **non-minimized** window (`onfocus`); if none
-exists, no window is focused. Minimize is a **no-op** on a non-minimizable
+exists, DOM focus falls to the taskbar element, the window's `fallbackFocus`,
+or stays put (see [Focus hand-off](#focus-hand-off)). Minimize is a **no-op**
+on a non-minimizable
 window (see [Minimizable](#minimizable)), so nothing can be stranded in a state
 with no way back.
 
@@ -200,10 +274,15 @@ the result.
 ### Focus hand-off
 
 Close and minimize share one hand-off: focus goes to the next
-most-recently-interacted non-minimized window in the root, or nowhere. Focus
-never lands on a hidden window.
+most-recently-interacted non-minimized window in the root. When no window can
+take it — minimize of the focused only window, or close of the focused last
+window — DOM focus falls to the root's taskbar element (the restore
+affordance), then to the window's `fallbackFocus` option, then does nothing:
+with no taskbar and no fallback, DOM focus stays where it is (on the minimized
+container, which is still focusable) or, after close removes the element, on
+`body`. Focus never lands on a hidden window.
 
-## 4. The taskbar
+## 5. The taskbar
 
 The taskbar is a shipped **headless** component — `MicroW.taskbar(root)` — one
 per root, that lists that root's windows and restores them. It ships DOM
@@ -247,12 +326,22 @@ flexbox bar, `grow` is the main-axis direction and `align` maps to
 ### Items
 
 One `.mcrw-taskbar-item` per **minimizable** live window of the root, in
-creation order, and never reordered on focus. Each item carries:
+creation order, and never reordered on focus. Items are native
+`<button type="button">` elements — tab-reachable in creation order (no
+roving tabindex), activated by Enter/Space like any button. Each item carries:
 
-- the window's title as its text,
+- the window's title as its accessible name (its text content), with the
+  labels bag's `untitledWindow` as the fallback for title-less windows,
+- `aria-expanded` — `false` exactly when the window is minimized — and
+  `aria-controls` pointing at the window container's id,
 - `mcrw-taskbar-item-min` / `mcrw-taskbar-item-max` state classes,
-- `mcrw-taskbar-item-focused` when the window is focused (the highlight moves in
+- `mcrw-taskbar-item-focused` when the window is focused — a visual cue only,
+  since DOM focus carries the semantic announcement (the highlight moves in
   place; the item order is stable).
+
+The bar itself is a labeled group: `role="group"` with `aria-label` from the
+labels bag's `taskbarLabel`, and `tabindex="-1"` so it can receive DOM focus
+as the focus-fallback target.
 
 Clicking a `min` item calls `restore()`; clicking a `normal` or `max` item calls
 `focus()` — the taskbar is a switcher, not just a restore affordance. Closing a
@@ -311,7 +400,7 @@ your own CSS — e.g. `mcrw-taskbar-grow-left` reverses the row,
 `mcrw-taskbar-align-center`/`-end` shift `justify-content`, and a `left` /
 `right` bar becomes a vertical rail whose `grow` is `down` / `up`.
 
-## 5. Cascade
+## 6. Cascade
 
 `MicroW.cascade({ root?, mode })` auto-places _new_ windows of a root into
 offset slots, so windows don't open dead-on top of each other. `root` defaults
@@ -332,7 +421,7 @@ after that. When the work area changes, the library re-places only the windows
 it still owns. Re-calling `MicroW.cascade` reconfigures the mode and re-places
 library-owned windows. An unknown `mode` throws a `TypeError`.
 
-## 6. API reference
+## 7. API reference
 
 ### Construction
 
@@ -343,21 +432,22 @@ new MicroW(options);
 All options are optional. The window mounts at construction and unmounts only
 when it closes.
 
-| Option        | Type                        | Default                                        | Meaning                                            |
-| ------------- | --------------------------- | ---------------------------------------------- | -------------------------------------------------- |
-| `root`        | `HTMLElement`               | `document.body`                                | the window's root; fixed at construction           |
-| `x`, `y`      | `number`                    | centered in the work area                      | container-relative position                        |
-| `width`       | `number`                    | 25% of work-area width                         | window width                                       |
-| `height`      | `number`                    | ¾ × `width` (4:3)                              | window height                                      |
-| `minWidth`    | `number`                    | —                                              | soft minimum width (the work area wins)            |
-| `minHeight`   | `number`                    | —                                              | soft minimum height (the work area wins)           |
-| `title`       | `string`                    | —                                              | header title text                                  |
-| `html`        | `string`                    | —                                              | body inner HTML                                    |
-| `controls`    | `{ left, right }`           | `{ left: [], right: ["min", "max", "close"] }` | header controls, each over `min` / `max` / `close` |
-| `resizable`   | `boolean`                   | `true`                                         | `false` omits handles and adds `mcrw-no-resize`    |
-| `taskbar`     | `boolean`                   | `true`                                         | `false` opts this window out (non-minimizable)     |
-| `class`, `id` | `string`                    | —                                              | passed onto the `.mcrw` element                    |
-| callbacks     | see [Callbacks](#callbacks) | —                                              | lifecycle and geometry hooks                       |
+| Option          | Type                        | Default                                        | Meaning                                                                                                                         |
+| --------------- | --------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `root`          | `HTMLElement`               | `document.body`                                | the window's root; fixed at construction                                                                                        |
+| `x`, `y`        | `number`                    | centered in the work area                      | container-relative position                                                                                                     |
+| `width`         | `number`                    | 25% of work-area width                         | window width                                                                                                                    |
+| `height`        | `number`                    | ¾ × `width` (4:3)                              | window height                                                                                                                   |
+| `minWidth`      | `number`                    | —                                              | soft minimum width (the work area wins)                                                                                         |
+| `minHeight`     | `number`                    | —                                              | soft minimum height (the work area wins)                                                                                        |
+| `title`         | `string`                    | —                                              | header title text                                                                                                               |
+| `html`          | `string`                    | —                                              | body inner HTML                                                                                                                 |
+| `controls`      | `{ left, right }`           | `{ left: [], right: ["min", "max", "close"] }` | header controls, each over `min` / `max` / `close`                                                                              |
+| `resizable`     | `boolean`                   | `true`                                         | `false` omits handles and adds `mcrw-no-resize`                                                                                 |
+| `taskbar`       | `boolean`                   | `true`                                         | `false` opts this window out (non-minimizable)                                                                                  |
+| `fallbackFocus` | `HTMLElement`               | —                                              | receives stranded DOM focus when no window and no taskbar can (see [The accessibility contract](#2-the-accessibility-contract)) |
+| `class`, `id`   | `string`                    | —                                              | passed onto the `.mcrw` element                                                                                                 |
+| callbacks       | see [Callbacks](#callbacks) | —                                              | lifecycle and geometry hooks                                                                                                    |
 
 `title` and `html` are construction-only: after mount you own the header and
 body content through the DOM.
@@ -373,17 +463,17 @@ the default size.
 
 All chainable (return the instance) unless noted.
 
-| Method                        | Meaning                                                                                                                     |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `minimize()`                  | transition to `min`; if focused, blurs and hands focus to the next MRU window. No-op when non-minimizable or already `min`. |
-| `maximize()`                  | fill the work area, remembering pre-max geometry. No-op when already `max`.                                                 |
-| `restore()`                   | return to the pre-minimize state, or `max → normal`; focuses and fires `onrestore`.                                         |
-| `moveTo(x, y)`                | move programmatically. No-op outside `normal`.                                                                              |
-| `resizeTo(width, height)`     | resize to an absolute size (anchored `se`). No-op outside `normal` / under `mcrw-no-resize`.                                |
-| `resizeFrom(dir, { dx, dy })` | resize from one of the eight directions (`n` … `sw`). No-op outside `normal` / under `mcrw-no-resize`.                      |
-| `focus()`                     | make this the focused, topmost window.                                                                                      |
-| `getState()`                  | read live state (below).                                                                                                    |
-| `destroy()`                   | remove the window, its registry entry, and its taskbar item; hand focus to the next MRU window. Returns `void`.             |
+| Method                        | Meaning                                                                                                                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `minimize()`                  | transition to `min`; if focused, blurs and hands focus to the next MRU window. No-op when non-minimizable or already `min`.                                                    |
+| `maximize()`                  | fill the work area, remembering pre-max geometry. No-op when already `max`.                                                                                                    |
+| `restore()`                   | return to the pre-minimize state, or `max → normal`; focuses and fires `onrestore`.                                                                                            |
+| `moveTo(x, y)`                | move programmatically. No-op outside `normal`.                                                                                                                                 |
+| `resizeTo(width, height)`     | resize to an absolute size (anchored `se`). No-op outside `normal` / under `mcrw-no-resize`.                                                                                   |
+| `resizeFrom(dir, { dx, dy })` | resize from one of the eight directions (`n` … `sw`). No-op outside `normal` / under `mcrw-no-resize`.                                                                         |
+| `focus()`                     | make this the focused, topmost window; moves real DOM focus to the container (one-way, ADR-0010).                                                                              |
+| `getState()`                  | read live state (below).                                                                                                                                                       |
+| `destroy()`                   | remove the window, its registry entry, and its taskbar item; hand focus to the next MRU window, or the fallback chain (see [Focus hand-off](#focus-hand-off)). Returns `void`. |
 
 Readonly properties: `root`, `element`, and `minimizable`.
 
@@ -436,18 +526,20 @@ geometry — the callback carries it.
 
 ### Statics
 
-| Static                            | Returns           | Meaning                                                                            |
-| --------------------------------- | ----------------- | ---------------------------------------------------------------------------------- |
-| `MicroW.taskbar(root?, options?)` | `Taskbar \| null` | mount a headless taskbar for a root; `null` when globally disabled.                |
-| `MicroW.windows(root?)`           | `MicroW[]`        | the live windows of a root (or every window when no root is given).                |
-| `MicroW.destroyAll()`             | `number`          | destroy every window (and every taskbar); returns the count.                       |
-| `MicroW.configure({ taskbar })`   | `void`            | global taskbar disable; restores any minimized windows rather than stranding them. |
-| `MicroW.cascade({ root?, mode })` | `void`            | auto-place new windows of a root in `"cascade"` or `"random"` slots.               |
+| Static                                                                                 | Returns           | Meaning                                                                                                            |
+| -------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `MicroW.taskbar(root?, options?)`                                                      | `Taskbar \| null` | mount a headless taskbar for a root; `null` when globally disabled.                                                |
+| `MicroW.windows(root?)`                                                                | `MicroW[]`        | the live windows of a root (or every window when no root is given).                                                |
+| `MicroW.destroyAll()`                                                                  | `number`          | destroy every window (and every taskbar); returns the count.                                                       |
+| `MicroW.setControlLabels({ min, max, close, moveHint, taskbarLabel, untitledWindow })` | `void`            | the i18n surface for all accessibility copy; a partial call merges over the English defaults, read at render time. |
+| `MicroW.configure({ taskbar })`                                                        | `void`            | global taskbar disable; restores any minimized windows rather than stranding them.                                 |
+| `MicroW.cascade({ root?, mode })`                                                      | `void`            | auto-place new windows of a root in `"cascade"` or `"random"` slots.                                               |
 
 ### Exported types
 
 Every option, callback, and static has an exported type:
-`MicroWOptions`, `MicroWGlobalOptions`, `ControlsOptions`, `TaskbarOptions`,
+`MicroWOptions`, `MicroWGlobalOptions`, `ControlsOptions`, `ControlLabels`,
+`TaskbarOptions`,
 `CascadeOptions`, `ControlName`, `ResizeDirection`, `TaskbarSide`,
 `TaskbarGrow`, `TaskbarAlign`, `CascadeMode`, `Rect`, `WorkArea`,
 `WindowSnapshot`, `WindowState`, `WindowEventCallback`, `WindowGeometryCallback`,
