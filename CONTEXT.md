@@ -34,6 +34,10 @@ _Avoid_: remove, kill, destroy, delete
 A configurable button in the window header (`min` / `max` / `close`), arranged per side by the `controls` configuration. `min` minimizes, `max` toggles between normal and max, `close` closes. A control's class is structural when the control is enabled; disabled controls are not rendered. The `max` control's toggle-back is the only in-window control that returns a `max` window to `normal` — the taskbar is still the only restore affordance for minimized windows.
 _Avoid_: button, icon, header action
 
+**Projection**:
+The single writer of state exposure: the per-window controls module that renders State onto the DOM — the window's state classes, the max control's `aria-pressed`, and every registered taskbar item's `aria-expanded` / `aria-controls` and state classes. State transitions hand it one call; identity (item text, `-focused`) remains the taskbar's to write, and DOM focus never feeds back (ADR-0010).
+_Avoid_: sync, ARIA writer, update pass
+
 **Mount**:
 Attaching the window's DOM into its root. A window mounts at construction and unmounts when it closes; its root is fixed at construction.
 _Avoid_: append, attach, teleport

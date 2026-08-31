@@ -411,6 +411,35 @@ describe("MicroW taskbar", () => {
     expect(win.getState().state).toBe("normal");
   });
 
+  it("global re-enable does not restore min controls to existing windows", () => {
+    const r = root();
+    const a = new MicroW({ root: r });
+    MicroW.configure({ taskbar: false });
+    MicroW.configure({ taskbar: true });
+
+    expect(a.element.querySelector(".mcrw-btn-min")).toBeNull();
+    a.minimize();
+    expect(a.getState().state).toBe("normal");
+
+    // Windows mounted after the re-enable get the min control back.
+    const b = new MicroW({ root: r });
+    expect(b.element.querySelector(".mcrw-btn-min")).not.toBeNull();
+  });
+
+  it("projects an item mounted after its window already minimized", () => {
+    const r = root();
+    const win = new MicroW({ root: r, title: "Late" });
+    win.minimize();
+
+    // The bar mounts into a world that already holds a minimized window;
+    // its very first item must be born truthful, not wait for a transition.
+    const bar = MicroW.taskbar(r)!;
+    const item = items(bar)[0];
+    expect(item.getAttribute("aria-expanded")).toBe("false");
+    expect(item.getAttribute("aria-controls")).toBe(win.element.id);
+    expect(item.classList.contains("mcrw-taskbar-item-min")).toBe(true);
+  });
+
   it("destroyAll removes mounted taskbars", () => {
     const r = root();
     new MicroW({ root: r });

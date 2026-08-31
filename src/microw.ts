@@ -13,7 +13,7 @@ import {
   resetCounter,
 } from "./cascade.js";
 import { isTaskbarEnabled, setTaskbarEnabled } from "./config.js";
-import { updateControlState } from "./control-state.js";
+import { WindowControls } from "./controls.js";
 import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
@@ -120,6 +120,7 @@ export class MicroW {
   private readonly onfocus: WindowEventCallback | undefined;
   private readonly onblur: WindowEventCallback | undefined;
   private readonly fallbackFocus: HTMLElement | undefined;
+  private readonly controls: WindowControls;
   private preMax: Rect | undefined;
   // Restore needs to know whether a minimized window was max or normal.
   private preMin: Exclude<WindowState, "min"> | undefined;
@@ -215,7 +216,15 @@ export class MicroW {
 
     const controls = normalizeControls(options.controls);
     this.taskbarOptIn = options.taskbar !== false;
-    this.appendControls(this.header, doc, controls.left);
+    this.controls = new WindowControls(
+      this,
+      doc,
+      controls.left,
+      controls.right,
+    );
+    for (const el of this.controls.leftElements) {
+      this.header.appendChild(el);
+    }
 
     const titleEl = doc.createElement("div");
     titleEl.className = "mcrw-title";
@@ -229,7 +238,12 @@ export class MicroW {
     }
     this.header.appendChild(titleEl);
 
-    this.appendControls(this.header, doc, controls.right);
+    for (const el of this.controls.rightElements) {
+      this.header.appendChild(el);
+    }
+    // The initial projection: state classes, max-control ARIA — the DOM is
+    // born truthful.
+    this.controls.project();
 
     const body = doc.createElement("div");
     body.className = "mcrw-body";
@@ -240,7 +254,6 @@ export class MicroW {
     this.element.appendChild(this.header);
     this.element.appendChild(body);
     this.mountResizeHandles(doc, options.resizable !== false);
-    updateControlState(this);
     // Ticket 05's taskbar items point aria-controls here, so only windows the
     // taskbar can actually restore get the auto id; consumer ids always win.
     if (options.id === undefined && this.minimizable) {
@@ -357,11 +370,7 @@ export class MicroW {
   }
 
   get minimizable(): boolean {
-    return (
-      this.taskbarOptIn &&
-      isTaskbarEnabled() &&
-      this.element.querySelector(".mcrw-btn-min") !== null
-    );
+    return this.taskbarOptIn && this.controls.minimizable;
   }
 
   minimize(): this {
@@ -370,8 +379,7 @@ export class MicroW {
     }
     this.preMin = this.state;
     this.state = "min";
-    this.applyStateClasses();
-    updateControlState(this);
+    this.emitState();
     this.onminimize?.(this);
     if (this.focused) {
       this.blur();
@@ -396,8 +404,7 @@ export class MicroW {
     this.fillWorkArea();
     this.state = "max";
     this.preMin = undefined;
-    this.applyStateClasses();
-    updateControlState(this);
+    this.emitState();
     this.onmaximize?.(this);
     notifyChange();
     return this;
@@ -431,8 +438,7 @@ export class MicroW {
       this.state = "normal";
     }
     this.preMin = undefined;
-    this.applyStateClasses();
-    updateControlState(this);
+    this.emitState();
     this.onrestore?.(this);
     this.focus();
     notifyChange();
@@ -497,6 +503,7 @@ export class MicroW {
     }
     this.destroyed = true;
 
+    this.controls.dispose();
     releaseOwned(this);
     this.dragCleanup?.();
     this.dragCleanup = null;
@@ -515,13 +522,10 @@ export class MicroW {
     this.onclose?.(this);
   }
 
-  private applyStateClasses(): void {
-    this.element.classList.remove("mcrw-min", "mcrw-max");
-    if (this.state === "min") {
-      this.element.classList.add("mcrw-min");
-    } else if (this.state === "max") {
-      this.element.classList.add("mcrw-max");
-    }
+  private emitState(): void {
+    // One call per state transition hands projection to the controls module:
+    // classes, control ARIA, and every registered taskbar item.
+    this.controls.project();
   }
 
   private blur(): void {
@@ -546,44 +550,6 @@ export class MicroW {
     // fallbackFocus, else a documented no-op.
     const target = taskbarElementOf(this.root) ?? this.fallbackFocus;
     target?.focus({ preventScroll: true });
-  }
-
-  private toggleMax(): void {
-    if (this.state === "max") {
-      this.restore();
-    } else {
-      this.maximize();
-    }
-  }
-
-  private appendControls(
-    parent: HTMLElement,
-    doc: Document,
-    names: ControlName[],
-  ): void {
-    for (const name of names) {
-      if (name === "min" && !isTaskbarEnabled()) {
-        continue;
-      }
-      const el = doc.createElement("button");
-      el.type = "button";
-      el.className = `mcrw-btn-${name}`;
-      el.setAttribute("aria-label", controlLabels()[name]);
-      el.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-        if (event.button === 0) {
-          this.focus();
-        }
-      });
-      if (name === "min") {
-        el.addEventListener("click", () => this.minimize());
-      } else if (name === "max") {
-        el.addEventListener("click", () => this.toggleMax());
-      } else if (name === "close") {
-        el.addEventListener("click", () => this.destroy());
-      }
-      parent.appendChild(el);
-    }
   }
 
   private toContainer(
@@ -781,11 +747,12 @@ export class MicroW {
     if (options.taskbar === undefined) {
       return;
     }
+    // The config channel strips every window's min control; the loop here is
+    // model work only — nothing can be stranded in a state with no way back.
     setTaskbarEnabled(options.taskbar);
     if (!options.taskbar) {
       destroyTaskbars();
       for (const win of windowsOf()) {
-        stripMinControl(win);
         if (win.getState().state === "min") {
           win.restore();
         }
@@ -823,10 +790,6 @@ export class MicroW {
       }
     });
   }
-}
-
-function stripMinControl(win: MicroW): void {
-  win.element.querySelector(".mcrw-btn-min")?.remove();
 }
 
 function clampRect(rect: Rect, workArea: WorkArea): Rect {

@@ -1,6 +1,6 @@
 import { onChange, windowsOf } from "./registry.js";
 import { controlLabels } from "./labels.js";
-import { updateControlState } from "./control-state.js";
+import { controlsOf } from "./controls.js";
 import { notifyWorkAreaChange, setTaskbarBand } from "./work-area.js";
 import type { MicroW } from "./microw.js";
 import type {
@@ -108,6 +108,11 @@ export class Taskbar {
     }
     this.destroyed = true;
     this.unsubscribe();
+    // The window's projection must forget its items, or a later state change
+    // would write state ARIA into nodes this bar already removed.
+    for (const [win, item] of this.items) {
+      controlsOf(win).unregisterItem(item);
+    }
     setTaskbarBand(this.root, this.side, null);
     this.element.remove();
     taskbars.delete(this.root);
@@ -143,6 +148,7 @@ export class Taskbar {
       if (!live.includes(win)) {
         item.remove();
         this.items.delete(win);
+        controlsOf(win).unregisterItem(item);
       }
     }
 
@@ -155,13 +161,16 @@ export class Taskbar {
         item.addEventListener("click", () => this.handleClick(win));
         this.items.set(win, item);
         this.element.appendChild(item);
+        // Register first: the window's projection writes the state classes
+        // and ARIA onto the fresh item; the identity pass below then adds
+        // text and the focused cue.
+        controlsOf(win).registerItem(item);
       }
+      // Identity and focus are the taskbar's to write; state projection
+      // belongs to the window's controls module.
       const state = win.getState();
       item.textContent = state.title ?? controlLabels().untitledWindow;
-      item.classList.toggle("mcrw-taskbar-item-min", state.state === "min");
-      item.classList.toggle("mcrw-taskbar-item-max", state.state === "max");
       item.classList.toggle("mcrw-taskbar-item-focused", state.focused);
-      updateControlState(win, item);
     }
 
     this.reclamp();
