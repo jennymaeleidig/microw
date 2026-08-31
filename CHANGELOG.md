@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Refactor: the registry's change channel split into three
+  (ticket "06 — split the registry's change channel").** Membership
+  (register / unregister), state (minimize / maximize / restore), and focus
+  are separate channels inside the registry module, and the taskbar declares
+  its reaction to each in one place: membership resyncs the items and
+  re-clamps the root; state and focus update one item or the highlight only.
+  A pure focus move no longer re-clamps every window or wakes the work-area
+  watchers. The taskbar still owns its band: a reaction whose laid-out band
+  changed propagates the work-area change (re-clamp, then wake the
+  watchers), so a band that appears, moves, or disappears is still detected
+  at the next reaction.
+
 - **Refactor: cascade re-placement consolidated into `cascade.ts`
   (ticket "05 — consolidate cascade re-placement").****
   Placement policy — slots, rolls, ownership, re-placement, and the

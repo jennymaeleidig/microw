@@ -2,10 +2,15 @@ import {
   registerFallbackTarget,
   unregisterFallbackTarget,
 } from "./focus-fallback.js";
-import { onChange, windowsOf } from "./registry.js";
+import {
+  onMembershipChange,
+  onFocusChange,
+  onStateChange,
+  windowsOf,
+} from "./registry.js";
 import { controlLabels } from "./labels.js";
 import { controlsOf } from "./controls.js";
-import { notifyWorkAreaChange, setTaskbarBand } from "./work-area.js";
+import { notifyWorkAreaChange, sameRect, setTaskbarBand } from "./work-area.js";
 import type { MicroW } from "./microw.js";
 import type {
   Rect,
@@ -71,8 +76,9 @@ export class Taskbar {
   readonly element: HTMLElement;
 
   private readonly side: TaskbarSide;
-  private readonly unsubscribe: () => void;
+  private readonly unsubscribers: Array<() => void>;
   private readonly items = new Map<MicroW, HTMLButtonElement>();
+  private lastBand: Rect | null = null;
   private destroyed = false;
 
   constructor(root: HTMLElement, options: TaskbarOptions = {}) {
@@ -99,7 +105,15 @@ export class Taskbar {
     root.appendChild(this.element);
     registerFallbackTarget(root, this.element);
     setTaskbarBand(root, this.side, () => this.measureBand());
-    this.unsubscribe = onChange(() => this.sync());
+    // The three channel reactions, declared in one place: membership is the
+    // only one that resyncs and re-clamps — a state change cannot change the
+    // live set (minimizable is fixed at construction), and a focus move
+    // changes no geometry.
+    this.unsubscribers = [
+      onMembershipChange(() => this.sync()),
+      onStateChange((win) => this.updateItem(win)),
+      onFocusChange(() => this.updateFocusCue()),
+    ];
     this.sync();
   }
 
@@ -108,7 +122,9 @@ export class Taskbar {
       return;
     }
     this.destroyed = true;
-    this.unsubscribe();
+    for (const unsubscribe of this.unsubscribers) {
+      unsubscribe();
+    }
     // The window's projection must forget its items, or a later state change
     // would write state ARIA into nodes this bar already removed.
     for (const [win, item] of this.items) {
@@ -170,11 +186,62 @@ export class Taskbar {
       }
       // Identity and focus are the taskbar's to write; state projection
       // belongs to the window's controls module.
-      const state = win.getState();
-      item.textContent = state.title ?? controlLabels().untitledWindow;
-      item.classList.toggle("mcrw-taskbar-item-focused", state.focused);
+      this.writeItem(item, win);
     }
 
+    this.reclamp();
+  }
+
+  // The state channel's reaction: the affected item's identity and focus
+  // cue, only — no item add/remove (the live set cannot have changed) and no
+  // re-clamp unless the band moved (syncBand). The item's state classes and
+  // ARIA were already projected by the window (emitState precedes the
+  // notification); the group label is re-read so it cannot drift from the
+  // item names.
+  private updateItem(win: MicroW): void {
+    this.syncBand();
+    const item = this.items.get(win);
+    if (item === undefined) {
+      return;
+    }
+    this.writeItem(item, win);
+    this.element.setAttribute("aria-label", controlLabels().taskbarLabel);
+  }
+
+  // The focus channel's reaction: move the highlight across the items, in
+  // place — no resync, and for an unchanged band no re-clamp and no
+  // work-area notification. Exactly one window per root is focused, so one
+  // pass over the items both sets and clears the right cues. The group
+  // label is re-read here for the same anti-drift reason as above.
+  private updateFocusCue(): void {
+    this.syncBand();
+    this.element.setAttribute("aria-label", controlLabels().taskbarLabel);
+    for (const [win, item] of this.items) {
+      this.setCue(item, win);
+    }
+  }
+
+  private writeItem(item: HTMLElement, win: MicroW): void {
+    item.textContent = win.getState().title ?? controlLabels().untitledWindow;
+    this.setCue(item, win);
+  }
+
+  private setCue(item: HTMLElement, win: MicroW): void {
+    item.classList.toggle("mcrw-taskbar-item-focused", win.getState().focused);
+  }
+
+  // The band is the taskbar's to own: when its laid-out extent changes, that
+  // is a work-area change and this bar propagates it (re-clamp, then wake
+  // the work-area watchers). A reaction whose band is unchanged — a pure
+  // focus move, a state flip — costs one band read and nothing else.
+  private syncBand(): void {
+    const band = this.measureBand();
+    const last = this.lastBand;
+    const unchanged =
+      last === null ? band === null : band !== null && sameRect(last, band);
+    if (unchanged) {
+      return;
+    }
     this.reclamp();
   }
 
@@ -190,6 +257,7 @@ export class Taskbar {
     for (const win of windowsOf(this.root)) {
       win.reclamp();
     }
+    this.lastBand = this.measureBand();
     notifyWorkAreaChange();
   }
 }

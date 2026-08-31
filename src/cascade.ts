@@ -1,5 +1,5 @@
 import { windowsOf } from "./registry.js";
-import { measureWorkArea, onWorkAreaChange } from "./work-area.js";
+import { measureWorkArea, onWorkAreaChange, sameRect } from "./work-area.js";
 import type { MicroW } from "./microw.js";
 import type { CascadeMode, WorkArea } from "./types.js";
 
@@ -207,13 +207,7 @@ onWorkAreaChange(() => {
   for (const root of configuredRoots()) {
     const workArea = measureWorkArea(root);
     const last = lastWorkArea.get(root);
-    if (
-      last !== undefined &&
-      last.x === workArea.x &&
-      last.y === workArea.y &&
-      last.width === workArea.width &&
-      last.height === workArea.height
-    ) {
+    if (last !== undefined && sameRect(last, workArea)) {
       continue;
     }
     lastWorkArea.set(root, workArea);

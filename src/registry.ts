@@ -15,23 +15,53 @@ export function nextAutoId(): number {
   return autoIdCounter;
 }
 
-const changeListeners = new Set<() => void>();
+// Three change channels — membership (register / unregister), state
+// (minimize / maximize / restore), focus (model focus moves) — so reactions
+// can be declared per channel: the taskbar resyncs on membership, and updates
+// one item or the highlight on state / focus without re-clamping the root.
+type ChannelListener = (win: MicroW) => void;
 
-/**
- * Subscribes to window-lifecycle changes — registry membership (register /
- * unregister) and state/focus transitions. Returns an unsubscribe function.
- */
-export function onChange(listener: () => void): () => void {
-  changeListeners.add(listener);
+const membershipListeners = new Set<ChannelListener>();
+const stateListeners = new Set<ChannelListener>();
+const focusListeners = new Set<ChannelListener>();
+
+export function onMembershipChange(listener: ChannelListener): () => void {
+  membershipListeners.add(listener);
   return () => {
-    changeListeners.delete(listener);
+    membershipListeners.delete(listener);
   };
 }
 
-export function notifyChange(): void {
-  for (const listener of [...changeListeners]) {
-    listener();
+export function onStateChange(listener: ChannelListener): () => void {
+  stateListeners.add(listener);
+  return () => {
+    stateListeners.delete(listener);
+  };
+}
+
+export function onFocusChange(listener: ChannelListener): () => void {
+  focusListeners.add(listener);
+  return () => {
+    focusListeners.delete(listener);
+  };
+}
+
+function notify(listeners: Set<ChannelListener>, win: MicroW): void {
+  for (const listener of [...listeners]) {
+    listener(win);
   }
+}
+
+export function notifyStateChange(win: MicroW): void {
+  notify(stateListeners, win);
+}
+
+export function notifyFocusChange(win: MicroW): void {
+  notify(focusListeners, win);
+}
+
+function notifyMembershipChange(win: MicroW): void {
+  notify(membershipListeners, win);
 }
 
 export function register(win: MicroW): void {
@@ -42,13 +72,13 @@ export function register(win: MicroW): void {
     list.push(win);
   }
   raise(win);
-  notifyChange();
+  notifyMembershipChange(win);
 }
 
 export function unregister(win: MicroW): void {
   removeFrom(windowsByRoot, win.root, win);
   removeFrom(mruByRoot, win.root, win);
-  notifyChange();
+  notifyMembershipChange(win);
 }
 
 function removeFrom(

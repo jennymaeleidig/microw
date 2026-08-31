@@ -45,6 +45,18 @@ export function setTaskbarBand(
 }
 
 /**
+ * Field-wise equality for two rects (a WorkArea is structurally a Rect).
+ * Change detection — the work-area watcher, the taskbar's band poll — is
+ * always "measured rect vs last applied rect", so the comparison lives with
+ * the measurement.
+ */
+export function sameRect(a: Rect, b: Rect): boolean {
+  return (
+    a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+  );
+}
+
+/**
  * The region of the root available to windows: its padding box, expressed in
  * container-relative coordinates (the padding edge is the containing-block
  * origin). Using `clientWidth`/`clientHeight` yields the padding box directly,

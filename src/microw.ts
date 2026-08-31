@@ -15,7 +15,8 @@ import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
   nextAutoId,
-  notifyChange,
+  notifyFocusChange,
+  notifyStateChange,
   raise,
   register,
   unregister,
@@ -354,7 +355,7 @@ export class MicroW {
     this.element.classList.add("mcrw-focused");
     raise(this);
     this.onfocus?.(this);
-    notifyChange();
+    notifyFocusChange(this);
     return this;
   }
 
@@ -374,7 +375,7 @@ export class MicroW {
       this.blur();
       this.handOffFocus();
     }
-    notifyChange();
+    notifyStateChange(this);
     return this;
   }
 
@@ -395,7 +396,7 @@ export class MicroW {
     this.preMin = undefined;
     this.emitState();
     this.onmaximize?.(this);
-    notifyChange();
+    notifyStateChange(this);
     return this;
   }
 
@@ -430,7 +431,7 @@ export class MicroW {
     this.emitState();
     this.onrestore?.(this);
     this.focus();
-    notifyChange();
+    notifyStateChange(this);
     return this;
   }
 
