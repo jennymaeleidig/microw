@@ -13,6 +13,7 @@ import {
   resetCounter,
 } from "./cascade.js";
 import { isTaskbarEnabled, setTaskbarEnabled } from "./config.js";
+import { updateControlState } from "./control-state.js";
 import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
@@ -236,7 +237,7 @@ export class MicroW {
     this.element.appendChild(this.header);
     this.element.appendChild(body);
     this.mountResizeHandles(doc, options.resizable !== false);
-    this.updateControlState();
+    updateControlState(this);
     // Ticket 05's taskbar items point aria-controls here, so only windows the
     // taskbar can actually restore get the auto id; consumer ids always win.
     if (options.id === undefined && this.minimizable) {
@@ -379,7 +380,7 @@ export class MicroW {
     this.preMin = this.state;
     this.state = "min";
     this.applyStateClasses();
-    this.updateControlState();
+    updateControlState(this);
     this.onminimize?.(this);
     if (this.focused) {
       this.blur();
@@ -405,7 +406,7 @@ export class MicroW {
     this.state = "max";
     this.preMin = undefined;
     this.applyStateClasses();
-    this.updateControlState();
+    updateControlState(this);
     this.onmaximize?.(this);
     notifyChange();
     return this;
@@ -444,7 +445,7 @@ export class MicroW {
     }
     this.preMin = undefined;
     this.applyStateClasses();
-    this.updateControlState();
+    updateControlState(this);
     this.onrestore?.(this);
     this.focus();
     notifyChange();
@@ -576,14 +577,6 @@ export class MicroW {
     } else {
       this.maximize();
     }
-  }
-
-  // Every state transition funnels through updateControlState so the DOM
-  // never lies about the window's maximized state. The label stays a
-  // constant "Maximize"; the pressed attribute carries the toggle semantics.
-  private updateControlState(): void {
-    const max = this.element.querySelector(".mcrw-btn-max");
-    max?.setAttribute("aria-pressed", this.state === "max" ? "true" : "false");
   }
 
   private appendControls(
