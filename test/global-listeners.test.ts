@@ -148,4 +148,20 @@ describe("MicroW global listeners: lifecycle", () => {
     // The listener is gone: teardown in afterEach must run clean.
     expect(() => win.destroy()).not.toThrow();
   });
+
+  it("a throwing listener during destroyAll aborts the loop mid-way", () => {
+    const r = root();
+    const first = new MicroW({ root: r });
+    new MicroW({ root: r });
+    const unsub = MicroW.onClose((win) => {
+      if (win === first) {
+        throw new Error("bang");
+      }
+    });
+
+    expect(() => MicroW.destroyAll()).toThrow("bang");
+    // The second window was never destroyed: the loop died on the first.
+    expect(MicroW.windows(r)).toHaveLength(1);
+    unsub();
+  });
 });

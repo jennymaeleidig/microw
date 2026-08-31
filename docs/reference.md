@@ -546,8 +546,9 @@ statics `MicroW.onCreate(listener)` and `MicroW.onClose(listener)` subscribe
 to _every_ window in the library — including windows created by other code.
 Each returns an unsubscribe function; multiple listeners all fire, in
 subscription order. A throwing listener propagates (fail loudly) — guard
-your own callbacks, since a throw during `destroy()` aborts the teardown
-mid-way.
+your own callbacks, since a throw during construction or `destroy()`
+aborts mid-way (a throwing listener inside `destroyAll()` leaves the
+remaining windows alive).
 
 Timing per event: the window's own option callback fires first, then the
 library's reactions (projection, taskbar), then your global listener. The
