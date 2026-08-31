@@ -1,16 +1,9 @@
 import { clampPosition, clampResize } from "./clamp.js";
 import {
-  configOf,
   configureCascade,
-  configuredRoots,
-  isCascadeConfigured,
-  markOwned,
-  nextCascadeSlot,
-  nextRandomIndex,
-  ownedWindows,
-  randomOffset,
+  placeWindow,
+  recascadeRoot,
   releaseOwned,
-  resetCounter,
 } from "./cascade.js";
 import { WindowControls, controlsOf } from "./controls.js";
 import {
@@ -46,7 +39,7 @@ import type {
   WindowState,
   WorkArea,
 } from "./types.js";
-import { measureWorkArea, onWorkAreaChange } from "./work-area.js";
+import { measureWorkArea } from "./work-area.js";
 
 const DEFAULT_WIDTH_RATIO = 0.25;
 const DEFAULT_ASPECT_RATIO = 0.75;
@@ -280,21 +273,10 @@ export class MicroW {
   }
 
   private placeCascade(workArea: WorkArea): Rect | null {
-    if (!isCascadeConfigured(this.root)) {
+    const pos = placeWindow(this, workArea, this.width, this.height);
+    if (pos === null) {
       return null;
     }
-    const cfg = configOf(this.root)!;
-    const pos =
-      cfg.mode === "cascade"
-        ? nextCascadeSlot(this.root, workArea, this.width, this.height)
-        : randomOffset(
-            cfg.seed,
-            nextRandomIndex(this.root),
-            workArea,
-            this.width,
-            this.height,
-          );
-    markOwned(this);
     return clampRect(
       { ...pos, width: this.width, height: this.height },
       workArea,
@@ -478,7 +460,12 @@ export class MicroW {
   // geometry, then fire onresize before onmove for the axes that changed.
   // moveTo, resizeFrom, reclamp, and cascade re-placement all route through
   // here, so the event order has exactly one home.
-  private applyRect(rect: Rect): void {
+  //
+  // Cascade re-placement (src/cascade.ts, type-only import discipline)
+  // applies new positions through this method, so it cannot be private.
+  // It is not consumer API: @internal keeps it out of the shipped .d.ts.
+  /** @internal */
+  applyRect(rect: Rect): void {
     const clamped = clampRect(rect, measureWorkArea(this.root));
     const moved = clamped.x !== this.x || clamped.y !== this.y;
     const resized =
@@ -696,6 +683,9 @@ export class MicroW {
     return windowsOf(root);
   }
 
+  // Validation-and-dispatch facade: the mode check is the consumer contract;
+  // placement policy (slots, rolls, ownership, re-placement, the work-area
+  // watcher) lives in cascade.ts.
   static cascade(options: CascadeOptions): void {
     const root = resolveRoot(options.root);
     if (options.mode !== "cascade" && options.mode !== "random") {
@@ -704,39 +694,7 @@ export class MicroW {
       );
     }
     configureCascade(root, options.mode);
-    MicroW.lastWorkArea.set(root, measureWorkArea(root));
-    MicroW.recascadeRoot(root);
-  }
-
-  private static recascadeRoot(root: HTMLElement): void {
-    const cfg = configOf(root);
-    if (cfg === undefined) {
-      return;
-    }
-    const workArea = measureWorkArea(root);
-    resetCounter(root);
-    for (const win of ownedWindows(root)) {
-      const snap = win.getState();
-      if (snap.state !== "normal") {
-        continue;
-      }
-      const pos =
-        cfg.mode === "cascade"
-          ? nextCascadeSlot(root, workArea, snap.width, snap.height)
-          : randomOffset(
-              cfg.seed,
-              nextRandomIndex(root),
-              workArea,
-              snap.width,
-              snap.height,
-            );
-      win.applyRect({
-        x: pos.x,
-        y: pos.y,
-        width: snap.width,
-        height: snap.height,
-      });
-    }
+    recascadeRoot(root);
   }
 
   static taskbar(root?: HTMLElement, options?: TaskbarOptions): Taskbar | null {
@@ -780,28 +738,6 @@ export class MicroW {
     }
     destroyTaskbars();
     return all.length;
-  }
-
-  private static readonly lastWorkArea = new Map<HTMLElement, WorkArea>();
-
-  static {
-    onWorkAreaChange(() => {
-      for (const root of configuredRoots()) {
-        const workArea = measureWorkArea(root);
-        const last = MicroW.lastWorkArea.get(root);
-        if (
-          last !== undefined &&
-          last.x === workArea.x &&
-          last.y === workArea.y &&
-          last.width === workArea.width &&
-          last.height === workArea.height
-        ) {
-          continue;
-        }
-        MicroW.lastWorkArea.set(root, workArea);
-        MicroW.recascadeRoot(root);
-      }
-    });
   }
 }
 

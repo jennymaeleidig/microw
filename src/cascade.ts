@@ -1,4 +1,5 @@
 import { windowsOf } from "./registry.js";
+import { measureWorkArea, onWorkAreaChange } from "./work-area.js";
 import type { MicroW } from "./microw.js";
 import type { CascadeMode, WorkArea } from "./types.js";
 
@@ -20,14 +21,13 @@ export function configureCascade(root: HTMLElement, mode: CascadeMode): void {
     existing.mode = mode;
     existing.counter = 0;
   }
+  // Baseline for the re-placement watcher: the configure-time re-placement
+  // the facade dispatches right after this is not itself a work-area change.
+  lastWorkArea.set(root, measureWorkArea(root));
 }
 
 export function configOf(root: HTMLElement): CascadeConfig | undefined {
   return configs.get(root);
-}
-
-export function isCascadeConfigured(root: HTMLElement): boolean {
-  return configs.has(root);
 }
 
 export function configuredRoots(): HTMLElement[] {
@@ -135,6 +135,91 @@ export function randomOffset(
     y: workArea.y + rng() * maxY,
   };
 }
+
+/**
+ * The configured slot or roll for the nth cascade-placed window of a root:
+ * the staircase step in cascade mode, the seeded offset in random mode.
+ */
+function slotFor(
+  root: HTMLElement,
+  cfg: CascadeConfig,
+  workArea: WorkArea,
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  return cfg.mode === "cascade"
+    ? nextCascadeSlot(root, workArea, width, height)
+    : randomOffset(cfg.seed, nextRandomIndex(root), workArea, width, height);
+}
+
+/**
+ * "Place this window": the configured slot or roll for a cascade-placed
+ * window, marking it owned. Returns null when the root has no cascade
+ * configuration — the caller's signal to fall back to its own placement.
+ */
+export function placeWindow(
+  win: MicroW,
+  workArea: WorkArea,
+  width: number,
+  height: number,
+): { x: number; y: number } | null {
+  const cfg = configOf(win.root);
+  if (cfg === undefined) {
+    return null;
+  }
+  markOwned(win);
+  return slotFor(win.root, cfg, workArea, width, height);
+}
+
+/**
+ * "Re-place the windows you own": reset the slot counter and walk the root's
+ * owned, normal-state windows through placement again, applying each new
+ * position through the window's one geometry writer. Minimized and maximized
+ * windows, and windows the consumer has taken over, are left alone.
+ */
+export function recascadeRoot(root: HTMLElement): void {
+  const cfg = configOf(root);
+  if (cfg === undefined) {
+    return;
+  }
+  const workArea = measureWorkArea(root);
+  resetCounter(root);
+  for (const win of ownedWindows(root)) {
+    const snap = win.getState();
+    if (snap.state !== "normal") {
+      continue;
+    }
+    const pos = slotFor(root, cfg, workArea, snap.width, snap.height);
+    win.applyRect({
+      x: pos.x,
+      y: pos.y,
+      width: snap.width,
+      height: snap.height,
+    });
+  }
+}
+
+// The watcher lives here with the policy it serves: a work-area change on a
+// configured root re-places the windows cascade still owns.
+const lastWorkArea = new Map<HTMLElement, WorkArea>();
+
+onWorkAreaChange(() => {
+  for (const root of configuredRoots()) {
+    const workArea = measureWorkArea(root);
+    const last = lastWorkArea.get(root);
+    if (
+      last !== undefined &&
+      last.x === workArea.x &&
+      last.y === workArea.y &&
+      last.width === workArea.width &&
+      last.height === workArea.height
+    ) {
+      continue;
+    }
+    lastWorkArea.set(root, workArea);
+    recascadeRoot(root);
+  }
+});
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;

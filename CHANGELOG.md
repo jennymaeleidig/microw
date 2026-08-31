@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Refactor: cascade re-placement consolidated into `cascade.ts`
+  (ticket "05 — consolidate cascade re-placement").****
+  Placement policy — slots, rolls, ownership, re-placement, and the
+  work-area watcher — now reads in one file, behind two interfaces:
+  "place this window" (`placeWindow`) and "re-place the windows you own"
+  (`recascadeRoot`). `MicroW.cascade()` is a validation-and-dispatch
+  facade. Cascade applies positions through the window's internal
+  `applyRect` writer, whose visibility ticket "01 — one geometry writer"
+  anticipated widening: the method is `@internal` and stripped from the
+  shipped `.d.ts`, staying out of the consumer contract. Behaviour
+  unchanged; the cascade determinism tests pass unchanged and now cover
+  re-placement through the same interface.
+
 - **Refactor: a registration seam for focus fallback.** The hand-off priority
   of
   [ADR-0010 — model focus directs DOM focus](docs/adr/0010-model-focus-directs-dom-focus.md)
