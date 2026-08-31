@@ -17,6 +17,7 @@ import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
   mruOf,
+  nextAutoId,
   notifyChange,
   raise,
   register,
@@ -174,6 +175,10 @@ export class MicroW {
     if (options.id !== undefined) {
       this.element.id = options.id;
     }
+    // A dialog needs a role and a focusable container: tabindex="-1" keeps it
+    // out of the tab sequence but lets focus() direct real DOM focus here.
+    this.element.setAttribute("role", "dialog");
+    this.element.tabIndex = -1;
 
     this.header = doc.createElement("div");
     this.header.className = "mcrw-header";
@@ -186,6 +191,11 @@ export class MicroW {
     titleEl.className = "mcrw-title";
     if (options.title !== undefined) {
       titleEl.textContent = options.title;
+      // The accessible name comes from the visible title text.
+      titleEl.id = `mcrw-title-${nextAutoId()}`;
+      this.element.setAttribute("aria-labelledby", titleEl.id);
+    } else {
+      this.element.setAttribute("aria-label", controlLabels().untitledWindow);
     }
     this.header.appendChild(titleEl);
 
@@ -201,6 +211,11 @@ export class MicroW {
     this.element.appendChild(body);
     this.mountResizeHandles(doc, options.resizable !== false);
     this.updateControlState();
+    // Ticket 05's taskbar items point aria-controls here, so only windows the
+    // taskbar can actually restore get the auto id; consumer ids always win.
+    if (options.id === undefined && this.minimizable) {
+      this.element.id = `mcrw-win-${nextAutoId()}`;
+    }
 
     this.writeGeometry();
 

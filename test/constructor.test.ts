@@ -373,3 +373,88 @@ describe("MicroW control labels", () => {
     ).toThrow(TypeError);
   });
 });
+
+describe("MicroW window role, name, and focusability", () => {
+  let seam: Seam;
+
+  beforeEach(() => {
+    seam = createSeam();
+  });
+
+  afterEach(() => {
+    MicroW.setControlLabels({ ...DEFAULT_CONTROL_LABELS });
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    return el;
+  }
+
+  it("exposes role=dialog and unconditional tabindex=-1 on the container", () => {
+    const win = new MicroW({ root: root() });
+    expect(win.element.getAttribute("role")).toBe("dialog");
+    expect(win.element.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("names a titled window via aria-labelledby pointing at the title element", () => {
+    const win = new MicroW({ root: root(), title: "Hello" });
+    const title = win.element.querySelector(".mcrw-title")!;
+    expect(title.id).toMatch(/^mcrw-title-\d+$/);
+    expect(win.element.getAttribute("aria-labelledby")).toBe(title.id);
+    expect(win.element.hasAttribute("aria-label")).toBe(false);
+  });
+
+  it("auto-assigns distinct title ids to distinct windows", () => {
+    const a = new MicroW({ root: root(), title: "A" });
+    const b = new MicroW({ root: root(), title: "B" });
+    const idA = a.element.querySelector(".mcrw-title")!.id;
+    const idB = b.element.querySelector(".mcrw-title")!.id;
+    expect(idA).not.toBe(idB);
+  });
+
+  it("names a title-less window from the bag's untitledWindow", () => {
+    const win = new MicroW({ root: root() });
+    expect(win.element.getAttribute("aria-label")).toBe("Untitled window");
+    expect(win.element.hasAttribute("aria-labelledby")).toBe(false);
+  });
+
+  it("reads untitledWindow from the bag at render time", () => {
+    MicroW.setControlLabels({ untitledWindow: "Unnamed window" });
+    const win = new MicroW({ root: root() });
+    expect(win.element.getAttribute("aria-label")).toBe("Unnamed window");
+  });
+
+  it("never overrides a consumer-supplied container id", () => {
+    const win = new MicroW({ root: root(), id: "win-1", title: "Hello" });
+    expect(win.element.id).toBe("win-1");
+  });
+
+  it("gives minimizable windows an auto mcrw-win id for the taskbar", () => {
+    const win = new MicroW({ root: root() });
+    expect(win.element.id).toMatch(/^mcrw-win-\d+$/);
+  });
+
+  it("does not give non-minimizable windows an auto mcrw-win id", () => {
+    const win = new MicroW({ root: root(), taskbar: false });
+    expect(win.element.id).toBe("");
+  });
+
+  it("auto ids never collide across windows", () => {
+    const r = root();
+    const a = new MicroW({ root: r, title: "A" });
+    const b = new MicroW({ root: r, title: "B" });
+    const c = new MicroW({ root: r });
+    const ids = [a.element.id, b.element.id, c.element.id];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("the container can receive DOM focus as a -1 tab stop", () => {
+    const r = root();
+    seam.document.body.appendChild(r);
+    const win = new MicroW({ root: r });
+    win.element.focus();
+    expect(seam.document.activeElement).toBe(win.element);
+  });
+});

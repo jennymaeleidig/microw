@@ -7,6 +7,14 @@ const mruByRoot = new Map<HTMLElement, MicroW[]>();
 
 let zTop = 0;
 
+let autoIdCounter = 0;
+
+/** Monotonic source for auto-assigned element ids (`mcrw-win-N`, `mcrw-title-N`). */
+export function nextAutoId(): number {
+  autoIdCounter += 1;
+  return autoIdCounter;
+}
+
 const changeListeners = new Set<() => void>();
 
 /**
