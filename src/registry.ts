@@ -15,75 +15,75 @@ export function nextAutoId(): number {
   return autoIdCounter;
 }
 
+// One channel = one listener set, a subscribe function returning an
+// unsubscribe function, and a notify that walks a snapshot (so a listener
+// may unsubscribe mid-notification).
+type ChannelListener = (win: MicroW) => void;
+
+interface Channel {
+  subscribe(listener: ChannelListener): () => void;
+  notify(win: MicroW): void;
+}
+
+function makeChannel(): Channel {
+  const listeners = new Set<ChannelListener>();
+  return {
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    notify(win) {
+      for (const listener of [...listeners]) {
+        listener(win);
+      }
+    },
+  };
+}
+
 // Three change channels — membership (register / unregister), state
 // (minimize / maximize / restore), focus (model focus moves) — so reactions
 // can be declared per channel: the taskbar resyncs on membership, and updates
 // one item or the highlight on state / focus without re-clamping the root.
-type ChannelListener = (win: MicroW) => void;
-
-const membershipListeners = new Set<ChannelListener>();
-const stateListeners = new Set<ChannelListener>();
-const focusListeners = new Set<ChannelListener>();
+const membership = makeChannel();
+const state = makeChannel();
+const focus = makeChannel();
 
 export function onMembershipChange(listener: ChannelListener): () => void {
-  membershipListeners.add(listener);
-  return () => {
-    membershipListeners.delete(listener);
-  };
+  return membership.subscribe(listener);
 }
 
 export function onStateChange(listener: ChannelListener): () => void {
-  stateListeners.add(listener);
-  return () => {
-    stateListeners.delete(listener);
-  };
+  return state.subscribe(listener);
 }
 
 export function onFocusChange(listener: ChannelListener): () => void {
-  focusListeners.add(listener);
-  return () => {
-    focusListeners.delete(listener);
-  };
-}
-
-function notify(listeners: Set<ChannelListener>, win: MicroW): void {
-  for (const listener of [...listeners]) {
-    listener(win);
-  }
+  return focus.subscribe(listener);
 }
 
 export function notifyStateChange(win: MicroW): void {
-  notify(stateListeners, win);
+  state.notify(win);
 }
 
 export function notifyFocusChange(win: MicroW): void {
-  notify(focusListeners, win);
+  focus.notify(win);
 }
 
-function notifyMembershipChange(win: MicroW): void {
-  notify(membershipListeners, win);
-}
-
-// The public lifecycle listeners (global-listeners ticket 01). They fire at
-// the same two events as the membership channel, but at their own emit
-// points — after the window's option callback — so a public listener never
-// fires before the window's own observer. Library reactions settle first:
-// the taskbar's channel notifies before these.
-const createdListeners = new Set<ChannelListener>();
-const closedListeners = new Set<ChannelListener>();
+// The public lifecycle listeners (ticket "01 — lifecycle listeners"). They
+// fire at the same two events as the membership channel, but at their own
+// emit points — after the window's option callback — so a public listener
+// never fires before the window's own observer. Library reactions settle
+// first: the taskbar's channel notifies before these.
+const created = makeChannel();
+const closed = makeChannel();
 
 export function onCreated(listener: ChannelListener): () => void {
-  createdListeners.add(listener);
-  return () => {
-    createdListeners.delete(listener);
-  };
+  return created.subscribe(listener);
 }
 
 export function onClosed(listener: ChannelListener): () => void {
-  closedListeners.add(listener);
-  return () => {
-    closedListeners.delete(listener);
-  };
+  return closed.subscribe(listener);
 }
 
 // Bookkeeping only — no notification. The constructor calls notifyRegistered
@@ -101,8 +101,8 @@ export function register(win: MicroW): void {
 // The membership emit point for a mount, after the option oncreate callback:
 // the taskbar reacts first (its channel), then the public listeners.
 export function notifyRegistered(win: MicroW): void {
-  notifyMembershipChange(win);
-  notify(createdListeners, win);
+  membership.notify(win);
+  created.notify(win);
 }
 
 // Bookkeeping only — no notification. destroy calls notifyUnregistered once
@@ -115,8 +115,8 @@ export function unregister(win: MicroW): void {
 // The membership emit point for a close, after the option onclose callback:
 // the taskbar reacts first (its channel), then the public listeners.
 export function notifyUnregistered(win: MicroW): void {
-  notifyMembershipChange(win);
-  notify(closedListeners, win);
+  membership.notify(win);
+  closed.notify(win);
 }
 
 function removeFrom(

@@ -9,7 +9,7 @@ describe("MicroW global listeners: lifecycle", () => {
 
   // Every subscription in a test is collected here so afterEach tears them
   // all down — no listener outlives its test.
-  function subscribe(subscribe: () => () => void): () => void {
+  function tracked(subscribe: () => () => void): () => void {
     const unsub = subscribe();
     unsubscribers.push(unsub);
     return unsub;
@@ -42,7 +42,7 @@ describe("MicroW global listeners: lifecycle", () => {
       registered: boolean;
       mounted: boolean;
     }> = [];
-    subscribe(() =>
+    tracked(() =>
       MicroW.onCreate((win) =>
         calls.push({
           phase: "global",
@@ -67,12 +67,12 @@ describe("MicroW global listeners: lifecycle", () => {
     expect(calls[0].mounted).toBe(true);
     expect(calls[1].registered).toBe(true);
     expect(calls[1].mounted).toBe(true);
-    void win;
+    expect(win.getState().state).toBe("normal");
   });
 
   it("a listener subscribed before any window exists captures the first creation", () => {
     const created: MicroW[] = [];
-    subscribe(() => MicroW.onCreate((win) => created.push(win)));
+    tracked(() => MicroW.onCreate((win) => created.push(win)));
 
     const win = new MicroW({ root: root() });
 
@@ -82,7 +82,7 @@ describe("MicroW global listeners: lifecycle", () => {
   it("onClose fires after the onclose option callback, once, with the window", () => {
     const r = root();
     const order: Array<{ phase: string; win?: MicroW }> = [];
-    subscribe(() =>
+    tracked(() =>
       MicroW.onClose((win) => order.push({ phase: "global", win })),
     );
 
@@ -99,7 +99,7 @@ describe("MicroW global listeners: lifecycle", () => {
   it("destroyAll fires the same per-window onClose sequence as individual destroys", () => {
     const r = root();
     const closed: MicroW[] = [];
-    subscribe(() => MicroW.onClose((win) => closed.push(win)));
+    tracked(() => MicroW.onClose((win) => closed.push(win)));
 
     const a = new MicroW({ root: r });
     const b = new MicroW({ root: r });
@@ -114,8 +114,8 @@ describe("MicroW global listeners: lifecycle", () => {
     const r = root();
     const first = vi.fn();
     const second = vi.fn();
-    const unsubFirst = subscribe(() => MicroW.onCreate(first));
-    subscribe(() => MicroW.onCreate(second));
+    const unsubFirst = tracked(() => MicroW.onCreate(first));
+    tracked(() => MicroW.onCreate(second));
 
     new MicroW({ root: r });
     expect(first).toHaveBeenCalledTimes(1);
