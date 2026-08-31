@@ -1,3 +1,7 @@
+import {
+  registerFallbackTarget,
+  unregisterFallbackTarget,
+} from "./focus-fallback.js";
 import { onChange, windowsOf } from "./registry.js";
 import { controlLabels } from "./labels.js";
 import { controlsOf } from "./controls.js";
@@ -62,10 +66,6 @@ export function destroyTaskbars(): void {
   }
 }
 
-export function taskbarElementOf(root: HTMLElement): HTMLElement | undefined {
-  return taskbars.get(root)?.element;
-}
-
 export class Taskbar {
   readonly root: HTMLElement;
   readonly element: HTMLElement;
@@ -97,6 +97,7 @@ export class Taskbar {
     this.element.tabIndex = -1;
 
     root.appendChild(this.element);
+    registerFallbackTarget(root, this.element);
     setTaskbarBand(root, this.side, () => this.measureBand());
     this.unsubscribe = onChange(() => this.sync());
     this.sync();
@@ -115,6 +116,7 @@ export class Taskbar {
     }
     setTaskbarBand(this.root, this.side, null);
     this.element.remove();
+    unregisterFallbackTarget(this.root);
     taskbars.delete(this.root);
     this.reclamp();
   }

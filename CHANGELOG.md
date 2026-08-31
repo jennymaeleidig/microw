@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Refactor: a registration seam for focus fallback.** The hand-off priority
+  of
+  [ADR-0010 — model focus directs DOM focus](docs/adr/0010-model-focus-directs-dom-focus.md)
+  — MRU non-min window, then the taskbar, then a window's `fallbackFocus`,
+  else a documented no-op — is now written once in a new internal
+  `focus-fallback` module. Fallback targets register there: the taskbar on
+  mount and unregisters on destroy, a window's `fallbackFocus` registers at
+  construction and unregisters on destroy. `microw.ts` no longer imports
+  `taskbar.ts` for hand-off (the statics' facade import stays); behaviour is
+  unchanged, and new seam-level tests pin the ordering.
+
 - **Refactor: one geometry-and-callback writer.** `moveTo`, `resizeFrom`,
   `reclamp`, and cascade re-placement all route placement through a single
   internal writer, so the clamp-then-write-then-fire order (`onresize` before

@@ -13,10 +13,14 @@ import {
   resetCounter,
 } from "./cascade.js";
 import { WindowControls, controlsOf } from "./controls.js";
+import {
+  nextFocusTarget,
+  registerWindowFallback,
+  unregisterWindowFallback,
+} from "./focus-fallback.js";
 import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
-  mruOf,
   nextAutoId,
   notifyChange,
   raise,
@@ -24,7 +28,7 @@ import {
   unregister,
   windowsOf,
 } from "./registry.js";
-import { createTaskbar, destroyTaskbars, taskbarElementOf } from "./taskbar.js";
+import { createTaskbar, destroyTaskbars } from "./taskbar.js";
 import type { Taskbar } from "./taskbar.js";
 import type {
   CascadeOptions,
@@ -264,6 +268,9 @@ export class MicroW {
 
     this.root.appendChild(this.element);
     register(this);
+    if (this.fallbackFocus !== undefined) {
+      registerWindowFallback(this, this.fallbackFocus);
+    }
     observeRoot(this.root);
     this.header.addEventListener("pointerdown", this.onPointerDown);
     this.header.addEventListener("keydown", this.onHeaderKeydown);
@@ -518,6 +525,8 @@ export class MicroW {
       this.blur();
       this.handOffFocus();
     }
+    // After the hand-off: it may need this window's own fallbackFocus.
+    unregisterWindowFallback(this);
 
     this.onclose?.(this);
   }
@@ -538,18 +547,16 @@ export class MicroW {
   }
 
   private handOffFocus(): void {
-    const next = mruOf(this.root).find(
-      (win) => win !== this && win.state !== "min",
-    );
-    if (next !== undefined) {
-      next.focus();
+    const target = nextFocusTarget(this.root, this);
+    if (target === undefined) {
+      // No window and no registered fallback: the documented no-op (ADR-0010).
       return;
     }
-    // No window can take focus: fall to the taskbar (the restore affordance,
-    // focusable once ticket 05 gives it tabindex="-1"), then the consumer's
-    // fallbackFocus, else a documented no-op.
-    const target = taskbarElementOf(this.root) ?? this.fallbackFocus;
-    target?.focus({ preventScroll: true });
+    if (target.kind === "window") {
+      target.win.focus();
+      return;
+    }
+    target.element.focus({ preventScroll: true });
   }
 
   private toContainer(
