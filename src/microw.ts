@@ -13,6 +13,7 @@ import {
   resetCounter,
 } from "./cascade.js";
 import { isTaskbarEnabled, setTaskbarEnabled } from "./config.js";
+import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
   mruOf,
@@ -26,6 +27,7 @@ import { createTaskbar, destroyTaskbars } from "./taskbar.js";
 import type { Taskbar } from "./taskbar.js";
 import type {
   CascadeOptions,
+  ControlLabels,
   ControlName,
   ControlsOptions,
   MicroWGlobalOptions,
@@ -198,6 +200,7 @@ export class MicroW {
     this.element.appendChild(this.header);
     this.element.appendChild(body);
     this.mountResizeHandles(doc, options.resizable !== false);
+    this.updateControlState();
 
     this.writeGeometry();
 
@@ -331,6 +334,7 @@ export class MicroW {
     this.preMin = this.state;
     this.state = "min";
     this.applyStateClasses();
+    this.updateControlState();
     this.onminimize?.(this);
     if (this.focused) {
       this.blur();
@@ -356,6 +360,7 @@ export class MicroW {
     this.state = "max";
     this.preMin = undefined;
     this.applyStateClasses();
+    this.updateControlState();
     this.onmaximize?.(this);
     notifyChange();
     return this;
@@ -394,6 +399,7 @@ export class MicroW {
     }
     this.preMin = undefined;
     this.applyStateClasses();
+    this.updateControlState();
     this.onrestore?.(this);
     this.focus();
     notifyChange();
@@ -519,6 +525,14 @@ export class MicroW {
     }
   }
 
+  // Every state transition funnels through updateControlState so the DOM
+  // never lies about the window's maximized state. The label stays a
+  // constant "Maximize"; the pressed attribute carries the toggle semantics.
+  private updateControlState(): void {
+    const max = this.element.querySelector(".mcrw-btn-max");
+    max?.setAttribute("aria-pressed", this.state === "max" ? "true" : "false");
+  }
+
   private appendControls(
     parent: HTMLElement,
     doc: Document,
@@ -528,8 +542,10 @@ export class MicroW {
       if (name === "min" && !isTaskbarEnabled()) {
         continue;
       }
-      const el = doc.createElement("div");
+      const el = doc.createElement("button");
+      el.type = "button";
       el.className = `mcrw-btn-${name}`;
+      el.setAttribute("aria-label", controlLabels()[name]);
       el.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
         if (event.button === 0) {
@@ -705,6 +721,10 @@ export class MicroW {
       return null;
     }
     return createTaskbar(resolveRoot(root), options ?? {});
+  }
+
+  static setControlLabels(labels: Partial<ControlLabels>): void {
+    patchLabels(labels);
   }
 
   static configure(options: MicroWGlobalOptions): void {

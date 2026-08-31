@@ -484,6 +484,28 @@ describe("MicroW state: minimize / maximize / restore / focus / MRU", () => {
     expect(win.element.classList.contains("mcrw-min")).toBe(true);
   });
 
+  it("activation parity: a UA-synthesized click runs the same handlers as pointer activation", () => {
+    const r = root();
+    const win = new MicroW({ root: r });
+    const fire = (selector: string): void => {
+      const el = win.element.querySelector(selector)!;
+      el.dispatchEvent(new seam.window.MouseEvent("click", { bubbles: true }));
+    };
+
+    // jsdom does not synthesize clicks from Enter/Space keydown; real
+    // browsers do that for native buttons, and the library adds no custom
+    // key handling. Dispatching a click is exactly what keyboard activation
+    // produces, so parity here is the structural guarantee.
+    fire(".mcrw-btn-max");
+    expect(win.getState().state).toBe("max");
+    fire(".mcrw-btn-max");
+    expect(win.getState().state).toBe("normal");
+    fire(".mcrw-btn-min");
+    expect(win.getState().state).toBe("min");
+    fire(".mcrw-btn-close");
+    expect(MicroW.windows(r)).not.toContain(win);
+  });
+
   it("the max control toggles normal <-> max", () => {
     const win = new MicroW({
       root: root(),
@@ -630,6 +652,54 @@ describe("MicroW state: minimize / maximize / restore / focus / MRU", () => {
       width: 800,
       height: 600,
     });
+  });
+
+  it("the max control exposes aria-pressed, synced across every transition", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 200,
+    });
+    const max = maxControl(win);
+
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+
+    win.maximize();
+    expect(max.getAttribute("aria-pressed")).toBe("true");
+
+    // Minimize of a max window is a transition: not maximized anymore.
+    win.minimize();
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+
+    // Restore from min-after-max lands in max: pressed again.
+    win.restore();
+    expect(max.getAttribute("aria-pressed")).toBe("true");
+    expect(max.getAttribute("aria-label")).toBe("Maximize");
+
+    win.restore();
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("minimizing a normal window sets aria-pressed to false", () => {
+    const win = new MicroW({ root: root() });
+    const max = maxControl(win);
+
+    win.minimize();
+
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("state transitions tolerate a missing max control", () => {
+    const win = new MicroW({
+      root: root(),
+      controls: { left: [], right: ["min", "close"] },
+    });
+
+    expect(() => win.minimize()).not.toThrow();
+    expect(() => win.restore()).not.toThrow();
+    expect(win.getState().state).toBe("normal");
   });
 
   it("state callbacks fire with the window instance only", () => {

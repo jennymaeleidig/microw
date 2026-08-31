@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MicroW } from "../src/index.js";
+import { DEFAULT_CONTROL_LABELS } from "../src/labels.js";
 import type { ControlName } from "../src/types.js";
 import { createSeam } from "./support/seam.js";
 import type { Seam } from "./support/seam.js";
@@ -297,5 +298,78 @@ describe("MicroW construction", () => {
     expect(oncreate).toHaveBeenCalledTimes(1);
     expect(oncreate).toHaveBeenCalledWith(win);
     expect(MicroW.windows(r)).toContain(win);
+  });
+});
+
+describe("MicroW control labels", () => {
+  let seam: Seam;
+
+  beforeEach(() => {
+    seam = createSeam();
+  });
+
+  afterEach(() => {
+    MicroW.setControlLabels({ ...DEFAULT_CONTROL_LABELS });
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    return el;
+  }
+
+  it("renders header controls as native buttons", () => {
+    const win = new MicroW({ root: root() });
+    for (const name of ["min", "max", "close"]) {
+      const el = win.element.querySelector(`.mcrw-btn-${name}`);
+      expect(el).toBeInstanceOf(seam.window.HTMLButtonElement);
+      expect((el as HTMLButtonElement).type).toBe("button");
+    }
+  });
+
+  it("labels controls with English defaults", () => {
+    const win = new MicroW({ root: root() });
+    expect(
+      win.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Minimize");
+    expect(
+      win.element.querySelector(".mcrw-btn-max")?.getAttribute("aria-label"),
+    ).toBe("Maximize");
+    expect(
+      win.element.querySelector(".mcrw-btn-close")?.getAttribute("aria-label"),
+    ).toBe("Close");
+  });
+
+  it("labels controls from the bag at render time", () => {
+    MicroW.setControlLabels({ min: "Iconify", close: "Destroy" });
+    const win = new MicroW({ root: root() });
+    expect(
+      win.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Iconify");
+    expect(
+      win.element.querySelector(".mcrw-btn-max")?.getAttribute("aria-label"),
+    ).toBe("Maximize");
+    expect(
+      win.element.querySelector(".mcrw-btn-close")?.getAttribute("aria-label"),
+    ).toBe("Destroy");
+  });
+
+  it("labels are read at render time, not retroactively", () => {
+    const before = new MicroW({ root: root() });
+    MicroW.setControlLabels({ min: "Iconify" });
+    const after = new MicroW({ root: root() });
+    expect(
+      before.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Minimize");
+    expect(
+      after.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Iconify");
+  });
+
+  it("rejects non-string label values", () => {
+    expect(() =>
+      MicroW.setControlLabels({ close: 42 as unknown as string }),
+    ).toThrow(TypeError);
   });
 });

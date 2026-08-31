@@ -19,6 +19,15 @@ export interface ControlsOptions {
   right?: ControlName[];
 }
 
+export interface ControlLabels {
+  min: string;
+  max: string;
+  close: string;
+  moveHint: string;
+  taskbarLabel: string;
+  untitledWindow: string;
+}
+
 export interface TaskbarOptions {
   side?: TaskbarSide;
   grow?: TaskbarGrow;
