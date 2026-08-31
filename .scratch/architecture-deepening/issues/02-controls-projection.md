@@ -2,8 +2,7 @@
 
 Candidate 1 of the architecture review (Strong) — top recommendation. Spec: `.scratch/architecture-deepening/spec.md`.
 
-Status: ready-for-agent
-Blocked by: 01
+Status: ready-for-human (implemented, reviewed, committed)
 
 ## Files
 
@@ -61,3 +60,24 @@ Deletions: `control-state.ts` (entire); `appendControls`, `applyStateClasses`, `
 - Existing 222 tests pass unchanged; new tests: item `aria-expanded`/`aria-controls` via `MicroW.taskbar(root)` + minimize; global-disable path via `MicroW.configure({taskbar: false})`.
 
 ## Comments
+
+- 2026-08-31: Implemented per Way B. Two disclosed deviations from the
+  ticket sketch, both accepted by spec review: the constructor exposes
+  `leftElements`/`rightElements` for MicroW to place around the title
+  element (the header-layout concern stays with the window), and the max
+  control's toggle logic moved into the click handler using only public
+  `win` methods (MicroW's private `toggleMax` deleted with it).
+- `project()` reads state via the public `win.getState().state` — one
+  extra work-area measurement per transition, cheaper than widening the
+  window's interface with a state accessor.
+- `Taskbar.destroy` unregisters all items (design weakness 3) — projection
+  can never write into removed nodes.
+- Review follow-ups applied: CONTEXT.md gains the **Projection** term;
+  `docs/aria-conformance-audit.md` re-pointed from the deleted
+  `stripMinControl` to the config-channel mechanism; new test pins that an
+  item mounted after its window already minimized is born truthful
+  (exercises `registerItem`'s immediate projection).
+- Review verdicts: Standards 0 hard violations / 4 judgement calls (2
+  addressed, 2 noted: `emitState` kept as the named per-transition seam;
+  left/right array clump judged not worth a type). Spec 16 met / 1 partial
+  (addressed) / 0 wrong / 0 missing. 226 tests pass.
