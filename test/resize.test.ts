@@ -25,6 +25,10 @@ describe("MicroW resize", () => {
     return win.element.querySelector(`.mcrw-resize-${dir}`)!;
   }
 
+  function headerOf(win: MicroW): HTMLElement {
+    return win.element.querySelector(".mcrw-header")!;
+  }
+
   it("mounts eight compass handles as direct children in order", () => {
     const win = new MicroW({ root: root() });
     const classes = [...win.element.children].map((el) => el.className);
@@ -530,5 +534,135 @@ describe("MicroW resize", () => {
     seam.pointerMove(handle, { x: 10000, y: 175 });
 
     expect(win.getState()).toMatchObject({ width: 260 });
+  });
+
+  it("Alt+arrow keys resize from the bottom-right corner in 10px steps", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowRight", { altKey: true });
+    expect(win.getState()).toMatchObject({ x: 100, y: 100, width: 210 });
+
+    seam.fireKeydown(header, "ArrowDown", { altKey: true });
+    expect(win.getState()).toMatchObject({ x: 100, y: 100, height: 160 });
+
+    seam.fireKeydown(header, "ArrowLeft", { altKey: true });
+    expect(win.getState()).toMatchObject({ x: 100, y: 100, width: 200 });
+
+    seam.fireKeydown(header, "ArrowUp", { altKey: true });
+    expect(win.getState()).toMatchObject({ x: 100, y: 100, height: 150 });
+  });
+
+  it("shift multiplies keyboard resize steps to 100px", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowRight", { altKey: true, shiftKey: true });
+    seam.fireKeydown(header, "ArrowDown", { altKey: true, shiftKey: true });
+
+    expect(win.getState()).toMatchObject({ width: 300, height: 250 });
+  });
+
+  it("keyboard resize clamps into the work area like pointer resize", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 600,
+      y: 450,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowRight", { altKey: true });
+    seam.fireKeydown(header, "ArrowDown", { altKey: true });
+
+    expect(win.getState()).toMatchObject({ width: 200, height: 150 });
+  });
+
+  it("keyboard resize honors minWidth/minHeight", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+      minWidth: 150,
+      minHeight: 100,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowLeft", { altKey: true, shiftKey: true });
+    seam.fireKeydown(header, "ArrowUp", { altKey: true, shiftKey: true });
+
+    expect(win.getState()).toMatchObject({ width: 150, height: 100 });
+  });
+
+  it("keyboard resize fires onresize with the full new rect", () => {
+    const onresize = vi.fn();
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+      onresize,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowRight", { altKey: true });
+
+    expect(onresize).toHaveBeenCalledTimes(1);
+    expect(onresize).toHaveBeenCalledWith(win, {
+      x: 100,
+      y: 100,
+      width: 210,
+      height: 150,
+    });
+  });
+
+  it("keyboard resize is gated for maximized, minimized, and non-resizable windows", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    win.maximize();
+    seam.fireKeydown(header, "ArrowLeft", { altKey: true });
+    expect(win.getState()).toMatchObject({
+      state: "max",
+      width: 800,
+      height: 600,
+    });
+
+    win.minimize();
+    seam.fireKeydown(header, "ArrowRight", { altKey: true });
+    expect(win.getState()).toMatchObject({ state: "min" });
+
+    const fixed = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+      resizable: false,
+    });
+    seam.fireKeydown(headerOf(fixed), "ArrowRight", { altKey: true });
+    expect(fixed.getState()).toMatchObject({ width: 200, height: 150 });
   });
 });

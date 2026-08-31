@@ -58,6 +58,13 @@ const RESIZE_DIRECTIONS: ResizeDirection[] = [
   "sw",
 ];
 
+const ARROW_DELTAS: Record<string, readonly [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
 interface NormalizedControls {
   left: ControlName[];
   right: ControlName[];
@@ -190,6 +197,17 @@ export class MicroW {
 
     this.header = doc.createElement("div");
     this.header.className = "mcrw-header";
+    // The header is the window's single keyboard surface: one tab stop whose
+    // label pairs identity (title) with affordance (move hint). It hosts the
+    // control buttons, so it takes no role of its own.
+    this.header.tabIndex = 0;
+    const labels = controlLabels();
+    const headerLabel =
+      options.title !== undefined ? options.title : labels.untitledWindow;
+    this.header.setAttribute(
+      "aria-label",
+      `${headerLabel}. ${labels.moveHint}`,
+    );
 
     const controls = normalizeControls(options.controls);
     this.taskbarOptIn = options.taskbar !== false;
@@ -231,6 +249,7 @@ export class MicroW {
     register(this);
     observeRoot(this.root);
     this.header.addEventListener("pointerdown", this.onPointerDown);
+    this.header.addEventListener("keydown", this.onHeaderKeydown);
     this.element.addEventListener("pointerdown", this.onFocusPointerDown);
 
     options.oncreate?.(this);
@@ -661,6 +680,28 @@ export class MicroW {
     doc.addEventListener("pointercancel", onEnd);
     this.dragCleanup = onEnd;
   }
+
+  // Keyboard move/resize routes through the same programmatic APIs as the
+  // pointer, so clamping, state gating, resizable, and callbacks come free.
+  // Only the header itself responds: keydowns bubbling from a focused control
+  // button must not move the window.
+  private readonly onHeaderKeydown = (event: KeyboardEvent): void => {
+    if (event.target !== this.header) {
+      return;
+    }
+    const delta = ARROW_DELTAS[event.key];
+    if (delta === undefined) {
+      return;
+    }
+    event.preventDefault();
+    const step = event.shiftKey ? 100 : 10;
+    const [sx, sy] = delta;
+    if (event.altKey) {
+      this.resizeFrom("se", { dx: sx * step, dy: sy * step });
+    } else {
+      this.moveTo(this.x + sx * step, this.y + sy * step);
+    }
+  };
 
   private readonly onResizePointerDown = (
     event: PointerEvent,

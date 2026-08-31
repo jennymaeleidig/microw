@@ -468,3 +468,49 @@ describe("MicroW window role, name, and focusability", () => {
     ).toThrow(TypeError);
   });
 });
+
+describe("MicroW header keyboard surface", () => {
+  let seam: Seam;
+
+  beforeEach(() => {
+    seam = createSeam();
+  });
+
+  afterEach(() => {
+    MicroW.setControlLabels({ ...DEFAULT_CONTROL_LABELS });
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    return el;
+  }
+
+  it("makes the header a single tab stop labeled with the title and move hint", () => {
+    const win = new MicroW({ root: root(), title: "Hello" });
+    const header = win.element.querySelector(".mcrw-header")!;
+    expect(header.getAttribute("tabindex")).toBe("0");
+    expect(header.getAttribute("aria-label")).toBe(
+      "Hello. Arrow keys to move, Alt+arrow keys to resize.",
+    );
+    expect(header.hasAttribute("role")).toBe(false);
+  });
+
+  it("labels a title-less header from the bag without a leading dot", () => {
+    const win = new MicroW({ root: root() });
+    const header = win.element.querySelector(".mcrw-header")!;
+    expect(header.getAttribute("aria-label")).toBe(
+      "Untitled window. Arrow keys to move, Alt+arrow keys to resize.",
+    );
+  });
+
+  it("reads the move hint from the bag at render time", () => {
+    MicroW.setControlLabels({ moveHint: "Use the arrow keys." });
+    const win = new MicroW({ root: root(), title: "Hello" });
+    const header = win.element.querySelector(".mcrw-header")!;
+    expect(header.getAttribute("aria-label")).toBe(
+      "Hello. Use the arrow keys.",
+    );
+  });
+});
