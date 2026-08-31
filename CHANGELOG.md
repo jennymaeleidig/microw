@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Refactor: one geometry-and-callback writer.** `moveTo`, `resizeFrom`,
+  `reclamp`, and cascade re-placement all route placement through a single
+  internal writer, so the clamp-then-write-then-fire order (`onresize` before
+  `onmove`) lives in exactly one place. Behaviour change: geometry callbacks
+  now fire only when the geometry actually changed — a no-op `moveTo`/
+  `resizeFrom` no longer fires `onmove`/`onresize` (previously it fired
+  unconditionally).
+
 ## v1.1 — accessibility conformance
 
 Semver-**minor**: the `mcrw-*` class contract is unchanged and every addition

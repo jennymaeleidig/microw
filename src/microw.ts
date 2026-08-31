@@ -160,7 +160,10 @@ export class MicroW {
     // Placement shares the one clamp: a window is always wholly inside its
     // work area, so construction shrinks an oversized size and pulls an
     // out-of-range position back into bounds (idempotent for cascade slots).
-    const clamped = clampRect({ x, y }, workArea, this.width, this.height);
+    const clamped = clampRect(
+      { x, y, width: this.width, height: this.height },
+      workArea,
+    );
     this.x = clamped.x;
     this.y = clamped.y;
     this.width = clamped.width;
@@ -272,7 +275,16 @@ export class MicroW {
             this.height,
           );
     markOwned(this);
-    return clampRect(pos, workArea, this.width, this.height);
+    return clampRect(
+      { ...pos, width: this.width, height: this.height },
+      workArea,
+    );
+  }
+
+  // The window's current geometry as a rect, so callers hand applyRect the
+  // whole thing instead of rebuilding the four fields at every call site.
+  private get rect(): Rect {
+    return { x: this.x, y: this.y, width: this.width, height: this.height };
   }
 
   moveTo(x: number, y: number): this {
@@ -280,17 +292,7 @@ export class MicroW {
       return this;
     }
     releaseOwned(this);
-    const workArea = measureWorkArea(this.root);
-    const position = clampPosition(x, y, this.width, this.height, workArea);
-    this.x = position.x;
-    this.y = position.y;
-    this.writeGeometry();
-    this.onmove?.(this, {
-      x: this.x,
-      y: this.y,
-      width: this.width,
-      height: this.height,
-    });
+    this.applyRect({ ...this.rect, x, y });
     return this;
   }
 
@@ -299,27 +301,16 @@ export class MicroW {
       return this;
     }
     releaseOwned(this);
-    const workArea = measureWorkArea(this.root);
     const rect = clampResize(
       dir,
-      { x: this.x, y: this.y, width: this.width, height: this.height },
+      this.rect,
       delta.dx ?? 0,
       delta.dy ?? 0,
-      workArea,
+      measureWorkArea(this.root),
       this.minWidth,
       this.minHeight,
     );
-    this.x = rect.x;
-    this.y = rect.y;
-    this.width = rect.width;
-    this.height = rect.height;
-    this.writeGeometry();
-    this.onresize?.(this, {
-      x: this.x,
-      y: this.y,
-      width: this.width,
-      height: this.height,
-    });
+    this.applyRect(rect);
     return this;
   }
 
@@ -429,13 +420,9 @@ export class MicroW {
       }
       // The invariant holds at every boundary: clamp the restored geometry
       // into the current work area, which may have shrunk while min/max.
-      const workArea = measureWorkArea(this.root);
-      const rect = clampRect(
-        { x: this.x, y: this.y },
-        workArea,
-        this.width,
-        this.height,
-      );
+      // Deliberately not applyRect: restore fires onrestore, never geometry
+      // callbacks (ADR-0009).
+      const rect = clampRect(this.rect, measureWorkArea(this.root));
       this.x = rect.x;
       this.y = rect.y;
       this.width = rect.width;
@@ -466,50 +453,40 @@ export class MicroW {
       return this;
     }
     const workArea = measureWorkArea(this.root);
-    const width =
-      this.state === "max"
-        ? workArea.width
-        : Math.min(this.width, workArea.width);
-    const height =
-      this.state === "max"
-        ? workArea.height
-        : Math.min(this.height, workArea.height);
-    const { x, y } = clampPosition(this.x, this.y, width, height, workArea);
-    const moved = x !== this.x || y !== this.y;
-    const resized = width !== this.width || height !== this.height;
-    this.x = x;
-    this.y = y;
-    this.width = width;
-    this.height = height;
-    if (moved || resized) {
-      this.writeGeometry();
-      const rect: Rect = { x, y, width, height };
-      if (resized) {
-        this.onresize?.(this, rect);
-      }
-      if (moved) {
-        this.onmove?.(this, rect);
-      }
-    }
+    this.applyRect({
+      ...this.rect,
+      width: this.state === "max" ? workArea.width : this.width,
+      height: this.state === "max" ? workArea.height : this.height,
+    });
     return this;
   }
 
-  private applyPlacement(x: number, y: number): void {
-    const workArea = measureWorkArea(this.root);
-    const rect = clampRect({ x, y }, workArea, this.width, this.height);
-    const moved = rect.x !== this.x || rect.y !== this.y;
-    const resized = rect.width !== this.width || rect.height !== this.height;
-    this.x = rect.x;
-    this.y = rect.y;
-    this.width = rect.width;
-    this.height = rect.height;
+  // The one placement writer: clamp into the current work area, write the
+  // geometry, then fire onresize before onmove for the axes that changed.
+  // moveTo, resizeFrom, reclamp, and cascade re-placement all route through
+  // here, so the event order has exactly one home.
+  private applyRect(rect: Rect): void {
+    const clamped = clampRect(rect, measureWorkArea(this.root));
+    const moved = clamped.x !== this.x || clamped.y !== this.y;
+    const resized =
+      clamped.width !== this.width || clamped.height !== this.height;
+    this.x = clamped.x;
+    this.y = clamped.y;
+    this.width = clamped.width;
+    this.height = clamped.height;
     if (moved || resized) {
       this.writeGeometry();
+      const fired: Rect = {
+        x: this.x,
+        y: this.y,
+        width: this.width,
+        height: this.height,
+      };
       if (resized) {
-        this.onresize?.(this, rect);
+        this.onresize?.(this, fired);
       }
       if (moved) {
-        this.onmove?.(this, rect);
+        this.onmove?.(this, fired);
       }
     }
   }
@@ -780,7 +757,12 @@ export class MicroW {
               snap.width,
               snap.height,
             );
-      win.applyPlacement(pos.x, pos.y);
+      win.applyRect({
+        x: pos.x,
+        y: pos.y,
+        width: snap.width,
+        height: snap.height,
+      });
     }
   }
 
@@ -847,14 +829,9 @@ function stripMinControl(win: MicroW): void {
   win.element.querySelector(".mcrw-btn-min")?.remove();
 }
 
-function clampRect(
-  pos: { x: number; y: number },
-  workArea: WorkArea,
-  width: number,
-  height: number,
-): Rect {
-  const w = Math.min(width, workArea.width);
-  const h = Math.min(height, workArea.height);
-  const { x, y } = clampPosition(pos.x, pos.y, w, h, workArea);
+function clampRect(rect: Rect, workArea: WorkArea): Rect {
+  const w = Math.min(rect.width, workArea.width);
+  const h = Math.min(rect.height, workArea.height);
+  const { x, y } = clampPosition(rect.x, rect.y, w, h, workArea);
   return { x, y, width: w, height: h };
 }

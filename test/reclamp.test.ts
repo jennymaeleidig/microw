@@ -197,6 +197,76 @@ describe("MicroW re-clamping on root/viewport resize", () => {
     expect(s.y + s.height).toBeLessThanOrEqual(300);
   });
 
+  it("fires onresize before onmove, once each, when reclamp moves and resizes", async () => {
+    const r = root();
+    const events: string[] = [];
+    const onmove = vi.fn(() => events.push("move"));
+    const onresize = vi.fn(() => events.push("resize"));
+    const win = new MicroW({
+      root: r,
+      x: 100,
+      y: 100,
+      width: 700,
+      height: 500,
+      onmove,
+      onresize,
+    });
+
+    seam.setLayout(r, { x: 0, y: 0, width: 500, height: 400 });
+    seam.triggerResizeObserver();
+    await tick();
+
+    expect(win.getState()).toMatchObject({
+      x: 0,
+      y: 0,
+      width: 500,
+      height: 400,
+    });
+    expect(onresize).toHaveBeenCalledTimes(1);
+    expect(onmove).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(["resize", "move"]);
+    expect(onresize).toHaveBeenCalledWith(win, {
+      x: 0,
+      y: 0,
+      width: 500,
+      height: 400,
+    });
+    expect(onmove).toHaveBeenCalledWith(win, {
+      x: 0,
+      y: 0,
+      width: 500,
+      height: 400,
+    });
+  });
+
+  it("a no-op moveTo fires no geometry callbacks, and a real one fires only onmove", () => {
+    const onmove = vi.fn();
+    const onresize = vi.fn();
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+      onmove,
+      onresize,
+    });
+
+    win.moveTo(100, 100);
+    expect(onmove).not.toHaveBeenCalled();
+    expect(onresize).not.toHaveBeenCalled();
+
+    win.moveTo(120, 100);
+    expect(onresize).not.toHaveBeenCalled();
+    expect(onmove).toHaveBeenCalledTimes(1);
+    expect(onmove).toHaveBeenCalledWith(win, {
+      x: 120,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+  });
+
   it("keeps windows inside the work area as a taskbar band moves on resize", async () => {
     const r = root();
     const win = new MicroW({
