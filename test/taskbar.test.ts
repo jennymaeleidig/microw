@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MicroW } from "../src/index.js";
+import { DEFAULT_CONTROL_LABELS } from "../src/labels.js";
 import type { Taskbar, TaskbarAlign, TaskbarSide } from "../src/index.js";
 import { createSeam } from "./support/seam.js";
 import type { Seam } from "./support/seam.js";
@@ -419,5 +420,176 @@ describe("MicroW taskbar", () => {
     MicroW.destroyAll();
 
     expect(r.querySelector(".mcrw-taskbar")).toBeNull();
+  });
+});
+
+describe("MicroW taskbar semantics", () => {
+  let seam: Seam;
+
+  beforeEach(() => {
+    seam = createSeam();
+  });
+
+  afterEach(() => {
+    MicroW.setControlLabels({ ...DEFAULT_CONTROL_LABELS });
+    MicroW.configure({ taskbar: true });
+    MicroW.destroyAll();
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    seam.document.body.appendChild(el);
+    return el;
+  }
+
+  function items(bar: Taskbar): HTMLElement[] {
+    return [
+      ...bar.element.querySelectorAll(".mcrw-taskbar-item"),
+    ] as HTMLElement[];
+  }
+
+  it("is a labeled group and the focus fallback target", () => {
+    const bar = MicroW.taskbar(root())!;
+
+    expect(bar.element.getAttribute("role")).toBe("group");
+    expect(bar.element.getAttribute("aria-label")).toBe("Taskbar");
+    expect(bar.element.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("labels the group from the bag at render time", () => {
+    MicroW.setControlLabels({ taskbarLabel: "Window list" });
+    const bar = MicroW.taskbar(root())!;
+
+    expect(bar.element.getAttribute("aria-label")).toBe("Window list");
+  });
+
+  it("re-reads the group label on sync, so it cannot drift from item names", () => {
+    const r = root();
+    const win = new MicroW({ root: r, title: "A" });
+    const bar = MicroW.taskbar(r)!;
+
+    MicroW.setControlLabels({ taskbarLabel: "Window list" });
+    win.focus(); // any registry change triggers a sync
+
+    expect(bar.element.getAttribute("aria-label")).toBe("Window list");
+  });
+
+  it("renders items as native buttons", () => {
+    const r = root();
+    new MicroW({ root: r, title: "A" });
+    const bar = MicroW.taskbar(r)!;
+
+    for (const item of items(bar)) {
+      expect(item).toBeInstanceOf(seam.window.HTMLButtonElement);
+      expect((item as HTMLButtonElement).type).toBe("button");
+      expect(item.hasAttribute("tabindex")).toBe(false);
+    }
+  });
+
+  it("names items by the window title, or untitledWindow for title-less windows", () => {
+    const r = root();
+    new MicroW({ root: r, title: "A" });
+    new MicroW({ root: r });
+    const bar = MicroW.taskbar(r)!;
+
+    expect(items(bar).map((el) => el.textContent)).toEqual([
+      "A",
+      "Untitled window",
+    ]);
+  });
+
+  it("reads item names from the bag at render time", () => {
+    MicroW.setControlLabels({ untitledWindow: "Unnamed window" });
+    const r = root();
+    new MicroW({ root: r });
+    const bar = MicroW.taskbar(r)!;
+
+    expect(items(bar)[0].textContent).toBe("Unnamed window");
+  });
+
+  it("exposes aria-expanded and aria-controls, synced across minimize and restore", () => {
+    const r = root();
+    const win = new MicroW({ root: r, title: "A" });
+    const bar = MicroW.taskbar(r)!;
+    const item = items(bar)[0];
+
+    expect(item.getAttribute("aria-expanded")).toBe("true");
+    expect(item.getAttribute("aria-controls")).toBe(win.element.id);
+
+    win.minimize();
+    expect(item.getAttribute("aria-expanded")).toBe("false");
+
+    win.restore();
+    expect(item.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("drops the item and its aria-controls when the window is destroyed", () => {
+    const r = root();
+    const win = new MicroW({ root: r, title: "A" });
+    const bar = MicroW.taskbar(r)!;
+
+    win.destroy();
+
+    expect(items(bar)).toEqual([]);
+    expect(
+      bar.element.querySelector(`[aria-controls="${win.element.id}"]`),
+    ).toBeNull();
+  });
+
+  it("keyboard activation restores a minimized window like a click", () => {
+    const r = root();
+    const a = new MicroW({ root: r, title: "A" });
+    const b = new MicroW({ root: r, title: "B" });
+    const bar = MicroW.taskbar(r)!;
+
+    a.focus();
+    b.focus();
+    b.minimize();
+
+    // jsdom does not synthesize clicks from Enter/Space keydown; real
+    // browsers do that for native buttons. Dispatching a click is exactly
+    // what keyboard activation produces.
+    const item = items(bar)[1];
+    item.dispatchEvent(new seam.window.MouseEvent("click", { bubbles: true }));
+
+    expect(b.getState()).toMatchObject({ state: "normal", focused: true });
+  });
+
+  it("minimizing the focused only window moves DOM focus to the taskbar", () => {
+    const r = root();
+    const win = new MicroW({ root: r, title: "A" });
+    const bar = MicroW.taskbar(r)!;
+
+    win.focus();
+    win.minimize();
+
+    expect(seam.document.activeElement).toBe(bar.element);
+  });
+
+  it("closing the focused last window moves DOM focus to the taskbar", () => {
+    const r = root();
+    const win = new MicroW({ root: r, title: "A" });
+    const bar = MicroW.taskbar(r)!;
+
+    win.focus();
+    win.destroy();
+
+    expect(seam.document.activeElement).toBe(bar.element);
+  });
+
+  it("the taskbar takes precedence over fallbackFocus in the hand-off chain", () => {
+    const r = root();
+    const fallback = seam.document.createElement("div");
+    fallback.tabIndex = -1;
+    seam.document.body.appendChild(fallback);
+    const win = new MicroW({ root: r, title: "A", fallbackFocus: fallback });
+    const bar = MicroW.taskbar(r)!;
+
+    win.focus();
+    win.minimize();
+
+    expect(seam.document.activeElement).toBe(bar.element);
   });
 });

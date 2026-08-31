@@ -313,4 +313,138 @@ describe("MicroW moveTo and header drag", () => {
     expect(win.element.style.left).toBe("150px");
     expect(win.element.style.top).toBe("150px");
   });
+
+  it("arrow keys on the focused header move the window in 10px steps", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowLeft");
+    seam.fireKeydown(header, "ArrowUp");
+    expect(win.getState()).toMatchObject({ x: 90, y: 90 });
+
+    seam.fireKeydown(header, "ArrowRight");
+    seam.fireKeydown(header, "ArrowDown");
+    expect(win.getState()).toMatchObject({ x: 100, y: 100 });
+  });
+
+  it("shift multiplies keyboard move steps to 100px", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowRight", { shiftKey: true });
+    seam.fireKeydown(header, "ArrowDown", { shiftKey: true });
+
+    expect(win.getState()).toMatchObject({ x: 200, y: 200 });
+  });
+
+  it("keyboard moves clamp into the work area like pointer drags", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 600,
+      y: 450,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "ArrowRight");
+    seam.fireKeydown(header, "ArrowDown");
+    expect(win.getState()).toMatchObject({ x: 600, y: 450 });
+
+    seam.fireKeydown(header, "ArrowLeft");
+    seam.fireKeydown(header, "ArrowUp");
+    expect(win.getState()).toMatchObject({ x: 590, y: 440 });
+  });
+
+  it("keyboard moves fire onmove with the same rect as pointer drags", () => {
+    const onmove = vi.fn();
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+      onmove,
+    });
+
+    seam.fireKeydown(win.element.querySelector(".mcrw-header")!, "ArrowRight");
+
+    expect(onmove).toHaveBeenCalledTimes(1);
+    expect(onmove).toHaveBeenCalledWith(win, {
+      x: 110,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+  });
+
+  it("keyboard moves are gated for minimized and maximized windows like pointer paths", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    win.maximize();
+    seam.fireKeydown(header, "ArrowLeft");
+    expect(win.getState()).toMatchObject({
+      state: "max",
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 600,
+    });
+
+    win.restore();
+    win.minimize();
+    seam.fireKeydown(header, "ArrowLeft");
+    expect(win.getState()).toMatchObject({ state: "min", x: 100, y: 100 });
+  });
+
+  it("arrow keys bubbling from a header control do not move the window", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const max = win.element.querySelector(".mcrw-btn-max")!;
+
+    seam.fireKeydown(max, "ArrowRight");
+
+    expect(win.getState()).toMatchObject({ x: 100, y: 100 });
+  });
+
+  it("keys other than the arrows do not move the window", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 100,
+      y: 100,
+      width: 200,
+      height: 150,
+    });
+    const header = headerOf(win);
+
+    seam.fireKeydown(header, "Enter");
+    seam.fireKeydown(header, "Home");
+    seam.fireKeydown(header, "a");
+
+    expect(win.getState()).toMatchObject({ x: 100, y: 100 });
+  });
 });

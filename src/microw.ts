@@ -13,19 +13,23 @@ import {
   resetCounter,
 } from "./cascade.js";
 import { isTaskbarEnabled, setTaskbarEnabled } from "./config.js";
+import { updateControlState } from "./control-state.js";
+import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
   mruOf,
+  nextAutoId,
   notifyChange,
   raise,
   register,
   unregister,
   windowsOf,
 } from "./registry.js";
-import { createTaskbar, destroyTaskbars } from "./taskbar.js";
+import { createTaskbar, destroyTaskbars, taskbarElementOf } from "./taskbar.js";
 import type { Taskbar } from "./taskbar.js";
 import type {
   CascadeOptions,
+  ControlLabels,
   ControlName,
   ControlsOptions,
   MicroWGlobalOptions,
@@ -54,6 +58,13 @@ const RESIZE_DIRECTIONS: ResizeDirection[] = [
   "se",
   "sw",
 ];
+
+const ARROW_DELTAS: Record<string, readonly [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
 
 interface NormalizedControls {
   left: ControlName[];
@@ -108,6 +119,7 @@ export class MicroW {
   private readonly onclose: WindowEventCallback | undefined;
   private readonly onfocus: WindowEventCallback | undefined;
   private readonly onblur: WindowEventCallback | undefined;
+  private readonly fallbackFocus: HTMLElement | undefined;
   private preMax: Rect | undefined;
   // Restore needs to know whether a minimized window was max or normal.
   private preMin: Exclude<WindowState, "min"> | undefined;
@@ -165,6 +177,13 @@ export class MicroW {
     this.onclose = options.onclose;
     this.onfocus = options.onfocus;
     this.onblur = options.onblur;
+    if (
+      options.fallbackFocus !== undefined &&
+      !isElement(options.fallbackFocus)
+    ) {
+      throw new TypeError("MicroW: `fallbackFocus` must be a DOM element");
+    }
+    this.fallbackFocus = options.fallbackFocus;
 
     const doc = this.root.ownerDocument;
     this.element = doc.createElement("div");
@@ -172,9 +191,24 @@ export class MicroW {
     if (options.id !== undefined) {
       this.element.id = options.id;
     }
+    // A dialog needs a role and a focusable container: tabindex="-1" keeps it
+    // out of the tab sequence but lets focus() direct real DOM focus here.
+    this.element.setAttribute("role", "dialog");
+    this.element.tabIndex = -1;
 
     this.header = doc.createElement("div");
     this.header.className = "mcrw-header";
+    // The header is the window's single keyboard surface: one tab stop whose
+    // label pairs identity (title) with affordance (move hint). It hosts the
+    // control buttons, so it takes no role of its own.
+    this.header.tabIndex = 0;
+    const labels = controlLabels();
+    const headerLabel =
+      options.title !== undefined ? options.title : labels.untitledWindow;
+    this.header.setAttribute(
+      "aria-label",
+      `${headerLabel}. ${labels.moveHint}`,
+    );
 
     const controls = normalizeControls(options.controls);
     this.taskbarOptIn = options.taskbar !== false;
@@ -184,6 +218,11 @@ export class MicroW {
     titleEl.className = "mcrw-title";
     if (options.title !== undefined) {
       titleEl.textContent = options.title;
+      // The accessible name comes from the visible title text.
+      titleEl.id = `mcrw-title-${nextAutoId()}`;
+      this.element.setAttribute("aria-labelledby", titleEl.id);
+    } else {
+      this.element.setAttribute("aria-label", controlLabels().untitledWindow);
     }
     this.header.appendChild(titleEl);
 
@@ -198,6 +237,12 @@ export class MicroW {
     this.element.appendChild(this.header);
     this.element.appendChild(body);
     this.mountResizeHandles(doc, options.resizable !== false);
+    updateControlState(this);
+    // Ticket 05's taskbar items point aria-controls here, so only windows the
+    // taskbar can actually restore get the auto id; consumer ids always win.
+    if (options.id === undefined && this.minimizable) {
+      this.element.id = `mcrw-win-${nextAutoId()}`;
+    }
 
     this.writeGeometry();
 
@@ -205,6 +250,7 @@ export class MicroW {
     register(this);
     observeRoot(this.root);
     this.header.addEventListener("pointerdown", this.onPointerDown);
+    this.header.addEventListener("keydown", this.onHeaderKeydown);
     this.element.addEventListener("pointerdown", this.onFocusPointerDown);
 
     options.oncreate?.(this);
@@ -300,6 +346,9 @@ export class MicroW {
   }
 
   focus(): this {
+    // Model focus directs DOM focus one-way (ADR-0010). Runs even when the
+    // model is already focused, so drifted DOM focus is recaptured.
+    this.element.focus({ preventScroll: true });
     if (this.focused) {
       return this;
     }
@@ -331,6 +380,7 @@ export class MicroW {
     this.preMin = this.state;
     this.state = "min";
     this.applyStateClasses();
+    updateControlState(this);
     this.onminimize?.(this);
     if (this.focused) {
       this.blur();
@@ -356,6 +406,7 @@ export class MicroW {
     this.state = "max";
     this.preMin = undefined;
     this.applyStateClasses();
+    updateControlState(this);
     this.onmaximize?.(this);
     notifyChange();
     return this;
@@ -394,6 +445,7 @@ export class MicroW {
     }
     this.preMin = undefined;
     this.applyStateClasses();
+    updateControlState(this);
     this.onrestore?.(this);
     this.focus();
     notifyChange();
@@ -508,7 +560,15 @@ export class MicroW {
     const next = mruOf(this.root).find(
       (win) => win !== this && win.state !== "min",
     );
-    next?.focus();
+    if (next !== undefined) {
+      next.focus();
+      return;
+    }
+    // No window can take focus: fall to the taskbar (the restore affordance,
+    // focusable once ticket 05 gives it tabindex="-1"), then the consumer's
+    // fallbackFocus, else a documented no-op.
+    const target = taskbarElementOf(this.root) ?? this.fallbackFocus;
+    target?.focus({ preventScroll: true });
   }
 
   private toggleMax(): void {
@@ -528,8 +588,10 @@ export class MicroW {
       if (name === "min" && !isTaskbarEnabled()) {
         continue;
       }
-      const el = doc.createElement("div");
+      const el = doc.createElement("button");
+      el.type = "button";
       el.className = `mcrw-btn-${name}`;
+      el.setAttribute("aria-label", controlLabels()[name]);
       el.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
         if (event.button === 0) {
@@ -611,6 +673,28 @@ export class MicroW {
     doc.addEventListener("pointercancel", onEnd);
     this.dragCleanup = onEnd;
   }
+
+  // Keyboard move/resize routes through the same programmatic APIs as the
+  // pointer, so clamping, state gating, resizable, and callbacks come free.
+  // Only the header itself responds: keydowns bubbling from a focused control
+  // button must not move the window.
+  private readonly onHeaderKeydown = (event: KeyboardEvent): void => {
+    if (event.target !== this.header) {
+      return;
+    }
+    const delta = ARROW_DELTAS[event.key];
+    if (delta === undefined) {
+      return;
+    }
+    event.preventDefault();
+    const step = event.shiftKey ? 100 : 10;
+    const [sx, sy] = delta;
+    if (event.altKey) {
+      this.resizeFrom("se", { dx: sx * step, dy: sy * step });
+    } else {
+      this.moveTo(this.x + sx * step, this.y + sy * step);
+    }
+  };
 
   private readonly onResizePointerDown = (
     event: PointerEvent,
@@ -705,6 +789,10 @@ export class MicroW {
       return null;
     }
     return createTaskbar(resolveRoot(root), options ?? {});
+  }
+
+  static setControlLabels(labels: Partial<ControlLabels>): void {
+    patchLabels(labels);
   }
 
   static configure(options: MicroWGlobalOptions): void {

@@ -71,7 +71,12 @@ _Avoid_: step, index
 ### Stacking and focus
 
 **Focus**:
-The window that is active in the library's model: its taskbar item is `-focused` and its element is topmost within its root. Focus is the only orthogonal state, and is model state — never real DOM focus.
+The window that is active in the library's model: its taskbar item is `-focused` and its element is topmost within its root. Focus is the only orthogonal state, and is model state — model focus directs real DOM focus to the focused window's container (ADR-0010), but DOM focus never feeds back into the model.
+_Avoid_: activation, selection
+
+**DOM focus**:
+Where the browser's focus actually sits (the focused window's container, or the fallback target when no window can take it). Follows model focus one-way; never the source of model state.
+_Avoid_: real focus, keyboard focus
 _Avoid_: active, selected
 
 **Z-order**:
@@ -85,8 +90,8 @@ A shipped headless component — `MicroW.taskbar(root)` — one per root, that l
 _Avoid_: dock, minimize stack
 
 **Taskbar item**:
-One element in a taskbar per minimizable live window of that root: title, state classes (`mcrw-taskbar-item-min`/`-max`), and `-focused` when the window is focused. Clicking restores a minimized item or focuses a visible item (normal/max). Items are ordered by creation and never reorder on focus — the `-focused` highlight moves in place.
-_Avoid_: tab, button
+One element in a taskbar per minimizable live window of that root: a native button whose accessible name is the window's title (fallback "Untitled window"), state classes (`mcrw-taskbar-item-min`/`-max`), and `-focused` when the window is focused — a visual cue only, since DOM focus carries the semantic announcement. Exposes `aria-expanded` (minimized) and `aria-controls` (the window container). Clicking restores a minimized item or focuses a visible item (normal/max). Items are ordered by creation and never reorder on focus — the `-focused` highlight moves in place.
+_Avoid_: tab
 
 **Cultivar**:
 A named consumer-side configuration recipe grown from the headless class contract — e.g. a bottom taskbar growing right, a centered dock, a vertical rail. The strip's side, growth, and alignment are class hooks (`mcrw-taskbar-*`) with documented semantics; a cultivar is the consumer CSS that turns a combination into a look. v1 ships the contract, not cultivars; they collect in the future recipe book.

@@ -70,6 +70,29 @@ describe("MicroW close: destroy / destroyAll", () => {
     expect(onfocus).toHaveBeenCalledWith(a);
     expect(a.getState().focused).toBe(true);
     expect(a.element.classList.contains("mcrw-focused")).toBe(true);
+    expect(seam.document.activeElement).toBe(a.element);
+  });
+
+  it("close of the focused last window moves DOM focus to the fallbackFocus element", () => {
+    const r = root();
+    const fallback = seam.document.createElement("div");
+    fallback.tabIndex = -1;
+    seam.document.body.appendChild(fallback);
+    const win = new MicroW({ root: r, fallbackFocus: fallback });
+
+    win.focus();
+    win.destroy();
+
+    expect(seam.document.activeElement).toBe(fallback);
+  });
+
+  it("close of the focused last window with no fallback leaves DOM focus on body", () => {
+    const win = new MicroW({ root: root() });
+
+    win.focus();
+    win.destroy();
+
+    expect(seam.document.activeElement).toBe(seam.document.body);
   });
 
   it("fires onblur, onfocus, then onclose in that order", () => {

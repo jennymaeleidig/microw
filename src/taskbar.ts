@@ -1,4 +1,6 @@
 import { onChange, windowsOf } from "./registry.js";
+import { controlLabels } from "./labels.js";
+import { updateControlState } from "./control-state.js";
 import { notifyWorkAreaChange, setTaskbarBand } from "./work-area.js";
 import type { MicroW } from "./microw.js";
 import type {
@@ -60,13 +62,17 @@ export function destroyTaskbars(): void {
   }
 }
 
+export function taskbarElementOf(root: HTMLElement): HTMLElement | undefined {
+  return taskbars.get(root)?.element;
+}
+
 export class Taskbar {
   readonly root: HTMLElement;
   readonly element: HTMLElement;
 
   private readonly side: TaskbarSide;
   private readonly unsubscribe: () => void;
-  private readonly items = new Map<MicroW, HTMLElement>();
+  private readonly items = new Map<MicroW, HTMLButtonElement>();
   private destroyed = false;
 
   constructor(root: HTMLElement, options: TaskbarOptions = {}) {
@@ -83,6 +89,12 @@ export class Taskbar {
       `mcrw-taskbar-grow-${grow}`,
       `mcrw-taskbar-align-${align}`,
     ].join(" ");
+    // A labeled group in the accessibility tree, and ticket 03's focus
+    // fallback: tabindex="-1" makes it focusable without joining the tab
+    // sequence.
+    this.element.setAttribute("role", "group");
+    this.element.setAttribute("aria-label", controlLabels().taskbarLabel);
+    this.element.tabIndex = -1;
 
     root.appendChild(this.element);
     setTaskbarBand(root, this.side, () => this.measureBand());
@@ -122,6 +134,9 @@ export class Taskbar {
     if (this.destroyed) {
       return;
     }
+    // Re-read on every sync so the group label can't drift from the item
+    // names, which re-read the bag here too.
+    this.element.setAttribute("aria-label", controlLabels().taskbarLabel);
     const live = windowsOf(this.root).filter((win) => win.minimizable);
 
     for (const [win, item] of this.items) {
@@ -134,17 +149,19 @@ export class Taskbar {
     for (const win of live) {
       let item = this.items.get(win);
       if (item === undefined) {
-        item = this.root.ownerDocument.createElement("div");
+        item = this.root.ownerDocument.createElement("button");
+        item.type = "button";
         item.className = "mcrw-taskbar-item";
         item.addEventListener("click", () => this.handleClick(win));
         this.items.set(win, item);
         this.element.appendChild(item);
       }
       const state = win.getState();
-      item.textContent = state.title ?? "";
+      item.textContent = state.title ?? controlLabels().untitledWindow;
       item.classList.toggle("mcrw-taskbar-item-min", state.state === "min");
       item.classList.toggle("mcrw-taskbar-item-max", state.state === "max");
       item.classList.toggle("mcrw-taskbar-item-focused", state.focused);
+      updateControlState(win, item);
     }
 
     this.reclamp();

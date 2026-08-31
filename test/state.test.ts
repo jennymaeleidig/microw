@@ -101,8 +101,34 @@ describe("MicroW state: minimize / maximize / restore / focus / MRU", () => {
     expect(b.element.classList.contains("mcrw-focused")).toBe(false);
     expect(a.getState().focused).toBe(true);
     expect(a.element.classList.contains("mcrw-focused")).toBe(true);
+    expect(seam.document.activeElement).toBe(a.element);
     expect(onblur).toHaveBeenCalledWith(b);
     expect(onfocus).toHaveBeenCalledWith(a);
+  });
+
+  it("minimizing the focused only window falls back to the fallbackFocus element", () => {
+    const r = root();
+    const fallback = seam.document.createElement("div");
+    fallback.tabIndex = -1;
+    seam.document.body.appendChild(fallback);
+    const win = new MicroW({ root: r, fallbackFocus: fallback });
+
+    win.focus();
+    win.minimize();
+
+    expect(seam.document.activeElement).toBe(fallback);
+  });
+
+  it("minimize with no other window, taskbar, or fallback is a DOM-focus no-op", () => {
+    const r = root();
+    const win = new MicroW({ root: r });
+
+    win.focus();
+    win.minimize();
+
+    // No hand-off target: focus stays on the minimized container, which is
+    // still in the DOM and focusable, so the user is not stranded on body.
+    expect(seam.document.activeElement).toBe(win.element);
   });
 
   it("minimize with no other window leaves nothing focused", () => {
@@ -205,6 +231,7 @@ describe("MicroW state: minimize / maximize / restore / focus / MRU", () => {
     expect(b.getState()).toMatchObject({ state: "normal", focused: true });
     expect(b.element.classList.contains("mcrw-min")).toBe(false);
     expect(a.getState().focused).toBe(false);
+    expect(seam.document.activeElement).toBe(b.element);
     expect(onrestore).toHaveBeenCalledWith(b);
   });
 
@@ -443,16 +470,39 @@ describe("MicroW state: minimize / maximize / restore / focus / MRU", () => {
     expect(win.element.classList.contains("mcrw-focused")).toBe(true);
   });
 
-  it("focus is model state, never real DOM focus", () => {
+  it("model focus directs real DOM focus to the container (ADR-0010)", () => {
     const win = new MicroW({ root: root() });
 
     win.focus();
 
     expect(win.getState().focused).toBe(true);
-    expect(seam.document.activeElement).not.toBe(win.element);
-    expect(win.element.contains(seam.document.activeElement as Node)).toBe(
-      false,
-    );
+    expect(seam.document.activeElement).toBe(win.element);
+  });
+
+  it("re-focusing an already-focused window restores drifted DOM focus", () => {
+    const win = new MicroW({ root: root() });
+    win.focus();
+    const other = seam.document.createElement("div");
+    other.tabIndex = 0;
+    seam.document.body.appendChild(other);
+    other.focus();
+
+    win.focus();
+
+    expect(seam.document.activeElement).toBe(win.element);
+    expect(win.getState().focused).toBe(true);
+  });
+
+  it("consumer-driven DOM focus never feeds back into the model", () => {
+    const r = root();
+    const a = new MicroW({ root: r });
+    const b = new MicroW({ root: r });
+
+    a.focus();
+    b.element.focus();
+
+    expect(b.getState().focused).toBe(false);
+    expect(a.getState().focused).toBe(true);
   });
 
   it("getState reports state and focused across transitions", () => {
@@ -482,6 +532,28 @@ describe("MicroW state: minimize / maximize / restore / focus / MRU", () => {
 
     expect(win.getState().state).toBe("min");
     expect(win.element.classList.contains("mcrw-min")).toBe(true);
+  });
+
+  it("activation parity: a UA-synthesized click runs the same handlers as pointer activation", () => {
+    const r = root();
+    const win = new MicroW({ root: r });
+    const fire = (selector: string): void => {
+      const el = win.element.querySelector(selector)!;
+      el.dispatchEvent(new seam.window.MouseEvent("click", { bubbles: true }));
+    };
+
+    // jsdom does not synthesize clicks from Enter/Space keydown; real
+    // browsers do that for native buttons, and the library adds no custom
+    // key handling. Dispatching a click is exactly what keyboard activation
+    // produces, so parity here is the structural guarantee.
+    fire(".mcrw-btn-max");
+    expect(win.getState().state).toBe("max");
+    fire(".mcrw-btn-max");
+    expect(win.getState().state).toBe("normal");
+    fire(".mcrw-btn-min");
+    expect(win.getState().state).toBe("min");
+    fire(".mcrw-btn-close");
+    expect(MicroW.windows(r)).not.toContain(win);
   });
 
   it("the max control toggles normal <-> max", () => {
@@ -630,6 +702,54 @@ describe("MicroW state: minimize / maximize / restore / focus / MRU", () => {
       width: 800,
       height: 600,
     });
+  });
+
+  it("the max control exposes aria-pressed, synced across every transition", () => {
+    const win = new MicroW({
+      root: root(),
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 200,
+    });
+    const max = maxControl(win);
+
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+
+    win.maximize();
+    expect(max.getAttribute("aria-pressed")).toBe("true");
+
+    // Minimize of a max window is a transition: not maximized anymore.
+    win.minimize();
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+
+    // Restore from min-after-max lands in max: pressed again.
+    win.restore();
+    expect(max.getAttribute("aria-pressed")).toBe("true");
+    expect(max.getAttribute("aria-label")).toBe("Maximize");
+
+    win.restore();
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("minimizing a normal window sets aria-pressed to false", () => {
+    const win = new MicroW({ root: root() });
+    const max = maxControl(win);
+
+    win.minimize();
+
+    expect(max.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("state transitions tolerate a missing max control", () => {
+    const win = new MicroW({
+      root: root(),
+      controls: { left: [], right: ["min", "close"] },
+    });
+
+    expect(() => win.minimize()).not.toThrow();
+    expect(() => win.restore()).not.toThrow();
+    expect(win.getState().state).toBe("normal");
   });
 
   it("state callbacks fire with the window instance only", () => {

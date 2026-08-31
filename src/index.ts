@@ -3,6 +3,7 @@ export type { Taskbar } from "./taskbar.js";
 export type {
   CascadeMode,
   CascadeOptions,
+  ControlLabels,
   ControlName,
   ControlsOptions,
   MicroWGlobalOptions,

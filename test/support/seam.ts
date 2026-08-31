@@ -83,7 +83,13 @@ export interface Seam {
   pointerDown(el: Element, point: Point): void;
   pointerMove(el: Element, point: Point): void;
   pointerUp(el: Element, point: Point): void;
+  fireKeydown(el: Element, key: string, options?: KeydownOptions): void;
   cleanup(): void;
+}
+
+export interface KeydownOptions {
+  altKey?: boolean;
+  shiftKey?: boolean;
 }
 
 export function createSeam(): Seam {
@@ -187,6 +193,17 @@ export function createSeam(): Seam {
     },
     pointerUp(el: Element, point: Point) {
       dispatchPointer("pointerup", el, point);
+    },
+    fireKeydown(el: Element, key: string, options: KeydownOptions = {}) {
+      el.dispatchEvent(
+        new win.KeyboardEvent("keydown", {
+          key,
+          bubbles: true,
+          cancelable: true,
+          altKey: options.altKey ?? false,
+          shiftKey: options.shiftKey ?? false,
+        }),
+      );
     },
     cleanup() {
       FakeResizeObserver.instances.length = 0;

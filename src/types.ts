@@ -19,6 +19,15 @@ export interface ControlsOptions {
   right?: ControlName[];
 }
 
+export interface ControlLabels {
+  min: string;
+  max: string;
+  close: string;
+  moveHint: string;
+  taskbarLabel: string;
+  untitledWindow: string;
+}
+
 export interface TaskbarOptions {
   side?: TaskbarSide;
   grow?: TaskbarGrow;
@@ -78,6 +87,7 @@ export interface MicroWOptions {
   controls?: ControlsOptions;
   resizable?: boolean;
   taskbar?: boolean;
+  fallbackFocus?: HTMLElement;
   class?: string;
   id?: string;
   oncreate?: WindowEventCallback;

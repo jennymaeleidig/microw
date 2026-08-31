@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MicroW } from "../src/index.js";
+import { DEFAULT_CONTROL_LABELS } from "../src/labels.js";
 import type { ControlName } from "../src/types.js";
 import { createSeam } from "./support/seam.js";
 import type { Seam } from "./support/seam.js";
@@ -297,5 +298,219 @@ describe("MicroW construction", () => {
     expect(oncreate).toHaveBeenCalledTimes(1);
     expect(oncreate).toHaveBeenCalledWith(win);
     expect(MicroW.windows(r)).toContain(win);
+  });
+});
+
+describe("MicroW control labels", () => {
+  let seam: Seam;
+
+  beforeEach(() => {
+    seam = createSeam();
+  });
+
+  afterEach(() => {
+    MicroW.setControlLabels({ ...DEFAULT_CONTROL_LABELS });
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    return el;
+  }
+
+  it("renders header controls as native buttons", () => {
+    const win = new MicroW({ root: root() });
+    for (const name of ["min", "max", "close"]) {
+      const el = win.element.querySelector(`.mcrw-btn-${name}`);
+      expect(el).toBeInstanceOf(seam.window.HTMLButtonElement);
+      expect((el as HTMLButtonElement).type).toBe("button");
+    }
+  });
+
+  it("labels controls with English defaults", () => {
+    const win = new MicroW({ root: root() });
+    expect(
+      win.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Minimize");
+    expect(
+      win.element.querySelector(".mcrw-btn-max")?.getAttribute("aria-label"),
+    ).toBe("Maximize");
+    expect(
+      win.element.querySelector(".mcrw-btn-close")?.getAttribute("aria-label"),
+    ).toBe("Close");
+  });
+
+  it("labels controls from the bag at render time", () => {
+    MicroW.setControlLabels({ min: "Iconify", close: "Destroy" });
+    const win = new MicroW({ root: root() });
+    expect(
+      win.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Iconify");
+    expect(
+      win.element.querySelector(".mcrw-btn-max")?.getAttribute("aria-label"),
+    ).toBe("Maximize");
+    expect(
+      win.element.querySelector(".mcrw-btn-close")?.getAttribute("aria-label"),
+    ).toBe("Destroy");
+  });
+
+  it("labels are read at render time, not retroactively", () => {
+    const before = new MicroW({ root: root() });
+    MicroW.setControlLabels({ min: "Iconify" });
+    const after = new MicroW({ root: root() });
+    expect(
+      before.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Minimize");
+    expect(
+      after.element.querySelector(".mcrw-btn-min")?.getAttribute("aria-label"),
+    ).toBe("Iconify");
+  });
+
+  it("rejects non-string label values", () => {
+    expect(() =>
+      MicroW.setControlLabels({ close: 42 as unknown as string }),
+    ).toThrow(TypeError);
+  });
+});
+
+describe("MicroW window role, name, and focusability", () => {
+  let seam: Seam;
+
+  beforeEach(() => {
+    seam = createSeam();
+  });
+
+  afterEach(() => {
+    MicroW.setControlLabels({ ...DEFAULT_CONTROL_LABELS });
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    return el;
+  }
+
+  it("exposes role=dialog and unconditional tabindex=-1 on the container", () => {
+    const win = new MicroW({ root: root() });
+    expect(win.element.getAttribute("role")).toBe("dialog");
+    expect(win.element.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("names a titled window via aria-labelledby pointing at the title element", () => {
+    const win = new MicroW({ root: root(), title: "Hello" });
+    const title = win.element.querySelector(".mcrw-title")!;
+    expect(title.id).toMatch(/^mcrw-title-\d+$/);
+    expect(win.element.getAttribute("aria-labelledby")).toBe(title.id);
+    expect(win.element.hasAttribute("aria-label")).toBe(false);
+  });
+
+  it("auto-assigns distinct title ids to distinct windows", () => {
+    const a = new MicroW({ root: root(), title: "A" });
+    const b = new MicroW({ root: root(), title: "B" });
+    const idA = a.element.querySelector(".mcrw-title")!.id;
+    const idB = b.element.querySelector(".mcrw-title")!.id;
+    expect(idA).not.toBe(idB);
+  });
+
+  it("names a title-less window from the bag's untitledWindow", () => {
+    const win = new MicroW({ root: root() });
+    expect(win.element.getAttribute("aria-label")).toBe("Untitled window");
+    expect(win.element.hasAttribute("aria-labelledby")).toBe(false);
+  });
+
+  it("reads untitledWindow from the bag at render time", () => {
+    MicroW.setControlLabels({ untitledWindow: "Unnamed window" });
+    const win = new MicroW({ root: root() });
+    expect(win.element.getAttribute("aria-label")).toBe("Unnamed window");
+  });
+
+  it("never overrides a consumer-supplied container id", () => {
+    const win = new MicroW({ root: root(), id: "win-1", title: "Hello" });
+    expect(win.element.id).toBe("win-1");
+  });
+
+  it("gives minimizable windows an auto mcrw-win id for the taskbar", () => {
+    const win = new MicroW({ root: root() });
+    expect(win.element.id).toMatch(/^mcrw-win-\d+$/);
+  });
+
+  it("does not give non-minimizable windows an auto mcrw-win id", () => {
+    const win = new MicroW({ root: root(), taskbar: false });
+    expect(win.element.id).toBe("");
+  });
+
+  it("auto ids never collide across windows", () => {
+    const r = root();
+    const a = new MicroW({ root: r, title: "A" });
+    const b = new MicroW({ root: r, title: "B" });
+    const c = new MicroW({ root: r });
+    const ids = [a.element.id, b.element.id, c.element.id];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("the container can receive DOM focus as a -1 tab stop", () => {
+    const r = root();
+    seam.document.body.appendChild(r);
+    const win = new MicroW({ root: r });
+    win.element.focus();
+    expect(seam.document.activeElement).toBe(win.element);
+  });
+
+  it("rejects a non-element fallbackFocus", () => {
+    expect(
+      () =>
+        new MicroW({
+          root: root(),
+          fallbackFocus: "not-an-element" as unknown as HTMLElement,
+        }),
+    ).toThrow(TypeError);
+  });
+});
+
+describe("MicroW header keyboard surface", () => {
+  let seam: Seam;
+
+  beforeEach(() => {
+    seam = createSeam();
+  });
+
+  afterEach(() => {
+    MicroW.setControlLabels({ ...DEFAULT_CONTROL_LABELS });
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    return el;
+  }
+
+  it("makes the header a single tab stop labeled with the title and move hint", () => {
+    const win = new MicroW({ root: root(), title: "Hello" });
+    const header = win.element.querySelector(".mcrw-header")!;
+    expect(header.getAttribute("tabindex")).toBe("0");
+    expect(header.getAttribute("aria-label")).toBe(
+      "Hello. Arrow keys to move, Alt+arrow keys to resize.",
+    );
+    expect(header.hasAttribute("role")).toBe(false);
+  });
+
+  it("labels a title-less header from the bag without a leading dot", () => {
+    const win = new MicroW({ root: root() });
+    const header = win.element.querySelector(".mcrw-header")!;
+    expect(header.getAttribute("aria-label")).toBe(
+      "Untitled window. Arrow keys to move, Alt+arrow keys to resize.",
+    );
+  });
+
+  it("reads the move hint from the bag at render time", () => {
+    MicroW.setControlLabels({ moveHint: "Use the arrow keys." });
+    const win = new MicroW({ root: root(), title: "Hello" });
+    const header = win.element.querySelector(".mcrw-header")!;
+    expect(header.getAttribute("aria-label")).toBe(
+      "Hello. Use the arrow keys.",
+    );
   });
 });
