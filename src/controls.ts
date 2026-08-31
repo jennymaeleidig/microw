@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: CC0-1.0
-import { isTaskbarEnabled, onTaskbarConfigChange } from "./config.js";
 import { controlLabels } from "./labels.js";
 import type { ControlName, WindowState } from "./types.js";
 import type { MicroW } from "./microw.js";
@@ -26,35 +25,29 @@ export class WindowControls {
   private minButton: HTMLButtonElement | null = null;
   private maxButton: HTMLButtonElement | null = null;
   private readonly items = new Set<HTMLElement>();
-  private readonly unsubscribeConfig: () => void;
 
   constructor(
     win: MicroW,
     doc: Document,
     left: ControlName[],
     right: ControlName[],
+    allowMin: boolean,
   ) {
     this.win = win;
-    const builtLeft = buildControls(win, doc, left);
-    const builtRight = buildControls(win, doc, right);
+    const builtLeft = buildControls(win, doc, left, allowMin);
+    const builtRight = buildControls(win, doc, right, allowMin);
     this.leftElements = builtLeft.elements;
     this.rightElements = builtRight.elements;
     this.minButton = builtLeft.min ?? builtRight.min ?? null;
     this.maxButton = builtLeft.max ?? builtRight.max ?? null;
-    // Fired on every global toggle; only a disable has work to do, and
-    // re-enabling deliberately does not resurrect stripped controls.
-    this.unsubscribeConfig = onTaskbarConfigChange(() => {
-      if (!isTaskbarEnabled() && this.minButton !== null) {
-        this.minButton.remove();
-        this.minButton = null;
-        this.project();
-      }
-    });
     controlsByWindow.set(win, this);
   }
 
+  // Invariant: a min button exists only if the taskbar was globally enabled
+  // at construction and no disable has stripped it since — so the reference
+  // alone answers the question.
   get minimizable(): boolean {
-    return this.minButton !== null && isTaskbarEnabled();
+    return this.minButton !== null;
   }
 
   /**
@@ -93,9 +86,22 @@ export class WindowControls {
     this.items.delete(item);
   }
 
-  /** Drops the config subscription; called by the window on destroy. */
+  /**
+   * Global taskbar disable: the min control poses as operable no longer.
+   * Called directly by MicroW.configure's window loop — no event channel.
+   * Re-enabling deliberately does not resurrect stripped controls.
+   */
+  disableMin(): void {
+    if (this.minButton === null) {
+      return;
+    }
+    this.minButton.remove();
+    this.minButton = null;
+    this.project();
+  }
+
+  /** Called by the window on destroy. */
   dispose(): void {
-    this.unsubscribeConfig();
     this.items.clear();
   }
 
@@ -117,6 +123,7 @@ function buildControls(
   win: MicroW,
   doc: Document,
   names: ControlName[],
+  allowMin: boolean,
 ): {
   elements: HTMLButtonElement[];
   min?: HTMLButtonElement;
@@ -126,7 +133,7 @@ function buildControls(
   let min: HTMLButtonElement | undefined;
   let max: HTMLButtonElement | undefined;
   for (const name of names) {
-    if (name === "min" && !isTaskbarEnabled()) {
+    if (name === "min" && !allowMin) {
       continue;
     }
     const el = doc.createElement("button");

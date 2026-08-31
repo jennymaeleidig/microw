@@ -12,8 +12,7 @@ import {
   releaseOwned,
   resetCounter,
 } from "./cascade.js";
-import { isTaskbarEnabled, setTaskbarEnabled } from "./config.js";
-import { WindowControls } from "./controls.js";
+import { WindowControls, controlsOf } from "./controls.js";
 import { controlLabels, setControlLabels as patchLabels } from "./labels.js";
 import { observeRoot, unobserveRoot } from "./observe.js";
 import {
@@ -221,6 +220,7 @@ export class MicroW {
       doc,
       controls.left,
       controls.right,
+      MicroW.taskbarEnabled,
     );
     for (const el of this.controls.leftElements) {
       this.header.appendChild(el);
@@ -733,7 +733,7 @@ export class MicroW {
   }
 
   static taskbar(root?: HTMLElement, options?: TaskbarOptions): Taskbar | null {
-    if (!isTaskbarEnabled()) {
+    if (!MicroW.taskbarEnabled) {
       return null;
     }
     return createTaskbar(resolveRoot(root), options ?? {});
@@ -747,18 +747,24 @@ export class MicroW {
     if (options.taskbar === undefined) {
       return;
     }
-    // The config channel strips every window's min control; the loop here is
-    // model work only — nothing can be stranded in a state with no way back.
-    setTaskbarEnabled(options.taskbar);
+    MicroW.taskbarEnabled = options.taskbar;
     if (!options.taskbar) {
       destroyTaskbars();
       for (const win of windowsOf()) {
+        // Direct call, not an event channel: disable is a rare, explicit,
+        // globally-scoped act, so this loop is the one honest place where
+        // it reaches every window.
+        controlsOf(win).disableMin();
         if (win.getState().state === "min") {
           win.restore();
         }
       }
     }
   }
+
+  // The one global configuration: a disabled taskbar removes minimize
+  // everywhere (ADR-0004 keeps it the restore affordance).
+  private static taskbarEnabled = true;
 
   static destroyAll(): number {
     const all = windowsOf();
