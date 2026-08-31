@@ -109,7 +109,9 @@ affordance: `"{title}. {moveHint}"`.
 
 Model focus directs DOM focus one-way
 ([ADR-0010](adr/0010-model-focus-directs-dom-focus.md)): `focus()` moves real
-DOM focus to the container with scrolling suppressed, and a minimize/close
+DOM focus to the container with scrolling suppressed — on every call, even
+when the window is already model-focused, so DOM focus that drifted away is
+recaptured — and a minimize/close
 hand-off with no window to receive it falls to the root's taskbar element,
 then to the window's `fallbackFocus` option, then does nothing. DOM focus
 never feeds back into the model.
