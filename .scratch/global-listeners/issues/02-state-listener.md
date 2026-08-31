@@ -4,7 +4,14 @@
 
 **Blocked by:** 01 — Lifecycle listeners (the facade pattern, subscription mechanics, and throwing-listener contract land there)
 
-**Status:** claimed
+**Status:** ready-for-human (implemented, reviewed, committed)
+
+- [x] `MicroW.onState(listener)` fires on every transition among `normal`, `min`, and `max`, for every Window regardless of who created it.
+- [x] The listener receives the Window and its snapshot; the snapshot equals `win.getState()` read at listener time (model and Projection settled — never a half-applied transition).
+- [x] The window's own option callback (`onminimize`/`onmaximize`/`onrestore`) fires before the global listener for the same transition.
+- [x] Subscription mechanics (unsubscribe, multi-listener, unsubscribe-function return) behave as established by ticket "01 — lifecycle listeners" — covered by reusing its test pattern, not re-proven exhaustively.
+- [x] Existing 222 tests pass unchanged; new tests subscribe through the public static and drive real windows.
+- [x] Reference-doc entry for the static and a changelog entry under Unreleased.
 
 ## Comments
 
@@ -17,6 +24,13 @@
   arbitrary listener arguments so the state channel can deliver
   `(win, snapshot)`. No-op transitions (early returns) and gated windows
   (`taskbar: false`) fire nothing, pinned by test.
+- 2026-08-31: Two-axis review: standards clean (0 hard violations; the
+  `notifyStateChange`/`notifyStateChanged`/`notifyStateSettled` naming trio
+  noted and accepted — the comments carry the distinction). Spec review
+  found the preMin=max restore path and the maximize ordering untested —
+  both pinned now (commit "test: pin the min-to-max restore path and
+  maximize ordering for onState"); the snapshot doc line notes it is
+  computed once at emit.
 
 - [ ] `MicroW.onState(listener)` fires on every transition among `normal`, `min`, and `max`, for every Window regardless of who created it.
 - [ ] The listener receives the Window and its snapshot; the snapshot equals `win.getState()` read at listener time (model and Projection settled — never a half-applied transition).
