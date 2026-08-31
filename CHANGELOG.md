@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Feature: global lifecycle listeners — `MicroW.onCreate` and
+  `MicroW.onClose`
+  (ticket "01 — lifecycle listeners" of the global-listeners spec).**
+  Subscribe once, statically, and observe every window mount and close —
+  including windows created by other code and bulk teardown via
+  `destroyAll()`. Each static returns an unsubscribe function; multiple
+  listeners fire in subscription order. Timing contract: the window's own
+  `oncreate`/`onclose` option callback fires first, then the library's
+  reactions (projection, taskbar), then the global listener. The membership
+  emit point moved from the registry bookkeeping to after the option
+  callbacks — the one sanctioned change to existing behaviour, with the
+  taskbar's reactions verified unchanged. Geometry is deliberately not
+  observable globally. A throwing listener propagates and aborts teardown
+  mid-way (documented).
+
 - **Refactor: the registry's change channel split into three
   (ticket "06 — split the registry's change channel").** Membership
   (register / unregister), state (minimize / maximize / restore), and focus
@@ -9,7 +24,10 @@
   its reaction to each in one place: membership resyncs the items and
   re-clamps the root; state and focus update one item or the highlight only.
   A pure focus move no longer re-clamps every window or wakes the work-area
-  watchers. The taskbar still owns its band: a reaction whose laid-out band
+  watchers. The registry's former single channel, `onChange`, had no external
+  consumers and was fully migrated and removed; the three channels are
+  internal — not exported from the package entry point. The taskbar still
+  owns its band: a reaction whose laid-out band
   changed propagates the work-area change (re-clamp, then wake the
   watchers), so a band that appears, moves, or disappears is still detected
   at the next reaction.

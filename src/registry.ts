@@ -64,6 +64,30 @@ function notifyMembershipChange(win: MicroW): void {
   notify(membershipListeners, win);
 }
 
+// The public lifecycle listeners (global-listeners ticket 01). They fire at
+// the same two events as the membership channel, but at their own emit
+// points — after the window's option callback — so a public listener never
+// fires before the window's own observer. Library reactions settle first:
+// the taskbar's channel notifies before these.
+const createdListeners = new Set<ChannelListener>();
+const closedListeners = new Set<ChannelListener>();
+
+export function onCreated(listener: ChannelListener): () => void {
+  createdListeners.add(listener);
+  return () => {
+    createdListeners.delete(listener);
+  };
+}
+
+export function onClosed(listener: ChannelListener): () => void {
+  closedListeners.add(listener);
+  return () => {
+    closedListeners.delete(listener);
+  };
+}
+
+// Bookkeeping only — no notification. The constructor calls notifyRegistered
+// once the option oncreate callback has run.
 export function register(win: MicroW): void {
   const list = windowsByRoot.get(win.root);
   if (list === undefined) {
@@ -72,13 +96,27 @@ export function register(win: MicroW): void {
     list.push(win);
   }
   raise(win);
-  notifyMembershipChange(win);
 }
 
+// The membership emit point for a mount, after the option oncreate callback:
+// the taskbar reacts first (its channel), then the public listeners.
+export function notifyRegistered(win: MicroW): void {
+  notifyMembershipChange(win);
+  notify(createdListeners, win);
+}
+
+// Bookkeeping only — no notification. destroy calls notifyUnregistered once
+// the option onclose callback has run.
 export function unregister(win: MicroW): void {
   removeFrom(windowsByRoot, win.root, win);
   removeFrom(mruByRoot, win.root, win);
+}
+
+// The membership emit point for a close, after the option onclose callback:
+// the taskbar reacts first (its channel), then the public listeners.
+export function notifyUnregistered(win: MicroW): void {
   notifyMembershipChange(win);
+  notify(closedListeners, win);
 }
 
 function removeFrom(

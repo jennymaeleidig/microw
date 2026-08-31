@@ -16,7 +16,11 @@ import { observeRoot, unobserveRoot } from "./observe.js";
 import {
   nextAutoId,
   notifyFocusChange,
+  notifyRegistered,
   notifyStateChange,
+  notifyUnregistered,
+  onClosed,
+  onCreated,
   raise,
   register,
   unregister,
@@ -271,6 +275,9 @@ export class MicroW {
     this.element.addEventListener("pointerdown", this.onFocusPointerDown);
 
     options.oncreate?.(this);
+    // The membership emit point: library reactions and the public lifecycle
+    // listeners run only after the window's own oncreate has run.
+    notifyRegistered(this);
   }
 
   private placeCascade(workArea: WorkArea): Rect | null {
@@ -517,6 +524,9 @@ export class MicroW {
     unregisterWindowFallback(this);
 
     this.onclose?.(this);
+    // The membership emit point: library reactions and the public lifecycle
+    // listeners run only after the window's own onclose has run.
+    notifyUnregistered(this);
   }
 
   private emitState(): void {
@@ -682,6 +692,25 @@ export class MicroW {
 
   static windows(root?: HTMLElement): MicroW[] {
     return windowsOf(root);
+  }
+
+  /**
+   * Subscribes to every window mount: the listener fires once per created
+   * window, after the window's own `oncreate` callback, with the window
+   * registered and mounted. Returns an unsubscribe function.
+   */
+  static onCreate(listener: (win: MicroW) => void): () => void {
+    return onCreated(listener);
+  }
+
+  /**
+   * Subscribes to every window close, including through `destroyAll()`: the
+   * listener fires once per closed window, after the window's own `onclose`
+   * callback. Returns an unsubscribe function. A throwing listener
+   * propagates and aborts the destroy mid-way.
+   */
+  static onClose(listener: (win: MicroW) => void): () => void {
+    return onClosed(listener);
   }
 
   // Validation-and-dispatch facade: the mode check is the consumer contract;
