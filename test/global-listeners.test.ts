@@ -165,3 +165,119 @@ describe("MicroW global listeners: lifecycle", () => {
     unsub();
   });
 });
+
+describe("MicroW global listeners: state", () => {
+  let seam: Seam;
+  let unsubscribers: Array<() => void>;
+
+  function tracked(subscribe: () => () => void): () => void {
+    const unsub = subscribe();
+    unsubscribers.push(unsub);
+    return unsub;
+  }
+
+  beforeEach(() => {
+    seam = createSeam();
+    unsubscribers = [];
+  });
+
+  afterEach(() => {
+    for (const unsub of unsubscribers.splice(0)) {
+      unsub();
+    }
+    MicroW.destroyAll();
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    seam.document.body.appendChild(el);
+    return el;
+  }
+
+  it("onState fires for every transition: min, restore, maximize, restore", () => {
+    const r = root();
+    const states: Array<string> = [];
+    tracked(() =>
+      MicroW.onState((win, snapshot) => states.push(snapshot.state)),
+    );
+
+    const win = new MicroW({ root: r });
+    win.minimize();
+    win.restore();
+    win.maximize();
+    win.restore();
+
+    expect(states).toEqual(["min", "normal", "max", "normal"]);
+    void win;
+  });
+
+  it("the listener receives the window and its settled snapshot", () => {
+    const r = root();
+    const seen: Array<{ win: MicroW; snapshot: unknown }> = [];
+    tracked(() =>
+      MicroW.onState((win, snapshot) => seen.push({ win, snapshot })),
+    );
+
+    const win = new MicroW({ root: r });
+    win.minimize();
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0].win).toBe(win);
+    expect(seen[0].snapshot).toEqual(win.getState());
+    expect(win.getState().state).toBe("min");
+  });
+
+  it("the window's own option callback fires before the global listener", () => {
+    const r = root();
+    const order: string[] = [];
+    tracked(() => MicroW.onState(() => order.push("global")));
+
+    const win = new MicroW({
+      root: r,
+      onminimize: () => order.push("option:minimize"),
+      onrestore: () => order.push("option:restore"),
+      onmaximize: () => order.push("option:maximize"),
+    });
+    win.minimize();
+    win.restore();
+
+    expect(order).toEqual([
+      "option:minimize",
+      "global",
+      "option:restore",
+      "global",
+    ]);
+  });
+
+  it("no-op transitions and gated windows fire nothing", () => {
+    const r = root();
+    const onState = vi.fn();
+    tracked(() => MicroW.onState(onState));
+
+    const win = new MicroW({ root: r });
+    win.minimize();
+    win.minimize(); // already min: no transition
+    win.maximize();
+    win.maximize(); // already max: no transition
+    expect(onState).toHaveBeenCalledTimes(2);
+
+    const gated = new MicroW({ root: r, taskbar: false });
+    gated.minimize(); // no restore affordance: no transition
+    expect(onState).toHaveBeenCalledTimes(2);
+  });
+
+  it("unsubscribing stops delivery", () => {
+    const r = root();
+    const onState = vi.fn();
+    const unsub = MicroW.onState(onState);
+
+    new MicroW({ root: r }).minimize();
+    expect(onState).toHaveBeenCalledTimes(1);
+
+    unsub();
+    new MicroW({ root: r }).minimize();
+    expect(onState).toHaveBeenCalledTimes(1);
+  });
+});

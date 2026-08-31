@@ -1,4 +1,5 @@
 import type { MicroW } from "./microw.js";
+import type { WindowSnapshot } from "./types.js";
 
 const Z_INDEX_BAND_MAX = 999;
 
@@ -20,13 +21,13 @@ export function nextAutoId(): number {
 // may unsubscribe mid-notification).
 type ChannelListener = (win: MicroW) => void;
 
-interface Channel {
-  subscribe(listener: ChannelListener): () => void;
-  notify(win: MicroW): void;
+interface Channel<Args extends unknown[]> {
+  subscribe(listener: (...args: Args) => void): () => void;
+  notify(...args: Args): void;
 }
 
-function makeChannel(): Channel {
-  const listeners = new Set<ChannelListener>();
+function makeChannel<Args extends unknown[]>(): Channel<Args> {
+  const listeners = new Set<(...args: Args) => void>();
   return {
     subscribe(listener) {
       listeners.add(listener);
@@ -34,9 +35,9 @@ function makeChannel(): Channel {
         listeners.delete(listener);
       };
     },
-    notify(win) {
+    notify(...args) {
       for (const listener of [...listeners]) {
-        listener(win);
+        listener(...args);
       }
     },
   };
@@ -46,9 +47,9 @@ function makeChannel(): Channel {
 // (minimize / maximize / restore), focus (model focus moves) — so reactions
 // can be declared per channel: the taskbar resyncs on membership, and updates
 // one item or the highlight on state / focus without re-clamping the root.
-const membership = makeChannel();
-const state = makeChannel();
-const focus = makeChannel();
+const membership = makeChannel<[MicroW]>();
+const state = makeChannel<[MicroW]>();
+const focus = makeChannel<[MicroW]>();
 
 export function onMembershipChange(listener: ChannelListener): () => void {
   return membership.subscribe(listener);
@@ -75,8 +76,27 @@ export function notifyFocusChange(win: MicroW): void {
 // emit points — after the window's option callback — so a public listener
 // never fires before the window's own observer. Library reactions settle
 // first: the taskbar's channel notifies before these.
-const created = makeChannel();
-const closed = makeChannel();
+const created = makeChannel<[MicroW]>();
+const closed = makeChannel<[MicroW]>();
+
+// The public state listeners fire at the same transitions as the state
+// channel, but at their own emit point — after the window's option callback
+// and the taskbar's reaction — carrying the settled snapshot so a listener
+// never reads a half-applied transition.
+const stateSettled = makeChannel<[MicroW, WindowSnapshot]>();
+
+export function onStateChanged(
+  listener: (win: MicroW, snapshot: WindowSnapshot) => void,
+): () => void {
+  return stateSettled.subscribe(listener);
+}
+
+export function notifyStateChanged(
+  win: MicroW,
+  snapshot: WindowSnapshot,
+): void {
+  stateSettled.notify(win, snapshot);
+}
 
 export function onCreated(listener: ChannelListener): () => void {
   return created.subscribe(listener);

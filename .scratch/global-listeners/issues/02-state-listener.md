@@ -4,7 +4,19 @@
 
 **Blocked by:** 01 — Lifecycle listeners (the facade pattern, subscription mechanics, and throwing-listener contract land there)
 
-**Status:** ready-for-agent
+**Status:** claimed
+
+## Comments
+
+- 2026-08-31: Implemented. No emit reorder was needed here: the state
+  transitions already fired the taskbar's channel after the option
+  callbacks, so the public emit point just extends that sequence — the
+  three transitions now end in one private `notifyStateSettled()` that
+  notifies the taskbar's channel, then the public listeners with the
+  settled snapshot. The registry's `makeChannel` was generalized to carry
+  arbitrary listener arguments so the state channel can deliver
+  `(win, snapshot)`. No-op transitions (early returns) and gated windows
+  (`taskbar: false`) fire nothing, pinned by test.
 
 - [ ] `MicroW.onState(listener)` fires on every transition among `normal`, `min`, and `max`, for every Window regardless of who created it.
 - [ ] The listener receives the Window and its snapshot; the snapshot equals `win.getState()` read at listener time (model and Projection settled — never a half-applied transition).

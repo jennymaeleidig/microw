@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Feature: global state listener — `MicroW.onState`
+  (ticket "02 — state listener" of the global-listeners spec).** Subscribe
+  once and observe every state transition of every window — minimize,
+  maximize, restore. The listener receives the window and its settled
+  snapshot (equal to `getState()` at listener time), after the window's own
+  option callback. No-op transitions and gated windows fire nothing.
+
 - **Feature: global lifecycle listeners — `MicroW.onCreate` and
   `MicroW.onClose`
   (ticket "01 — lifecycle listeners" of the global-listeners spec).**

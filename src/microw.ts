@@ -17,10 +17,12 @@ import {
   nextAutoId,
   notifyFocusChange,
   notifyRegistered,
+  notifyStateChanged,
   notifyStateChange,
   notifyUnregistered,
   onClosed,
   onCreated,
+  onStateChanged,
   raise,
   register,
   unregister,
@@ -382,7 +384,7 @@ export class MicroW {
       this.blur();
       this.handOffFocus();
     }
-    notifyStateChange(this);
+    this.notifyStateSettled();
     return this;
   }
 
@@ -403,7 +405,7 @@ export class MicroW {
     this.preMin = undefined;
     this.emitState();
     this.onmaximize?.(this);
-    notifyStateChange(this);
+    this.notifyStateSettled();
     return this;
   }
 
@@ -438,7 +440,7 @@ export class MicroW {
     this.emitState();
     this.onrestore?.(this);
     this.focus();
-    notifyStateChange(this);
+    this.notifyStateSettled();
     return this;
   }
 
@@ -533,6 +535,14 @@ export class MicroW {
     // One call per state transition hands projection to the controls module:
     // classes, control ARIA, and every registered taskbar item.
     this.controls.project();
+  }
+
+  // The state emit point, called last by every state transition: the taskbar
+  // reacts first (its channel), then the public listeners receive the settled
+  // snapshot — the window's own option callback has already run by then.
+  private notifyStateSettled(): void {
+    notifyStateChange(this);
+    notifyStateChanged(this, this.getState());
   }
 
   private blur(): void {
@@ -711,6 +721,19 @@ export class MicroW {
    */
   static onClose(listener: (win: MicroW) => void): () => void {
     return onClosed(listener);
+  }
+
+  /**
+   * Subscribes to every state transition (minimize, maximize, restore) of
+   * every window: the listener receives the window and its settled snapshot,
+   * equal to `getState()` at listener time, after the window's own
+   * `onminimize`/`onmaximize`/`onrestore` callback. Returns an unsubscribe
+   * function.
+   */
+  static onState(
+    listener: (win: MicroW, snapshot: WindowSnapshot) => void,
+  ): () => void {
+    return onStateChanged(listener);
   }
 
   // Validation-and-dispatch facade: the mode check is the consumer contract;
