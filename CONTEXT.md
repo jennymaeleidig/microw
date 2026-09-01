@@ -87,6 +87,12 @@ _Avoid_: active, selected
 The stacking of windows within their root: the focused window is topmost, the rest ordered by most-recent interaction (MRU). Z-order is root-scoped — windows of different roots never interleave; a root's windows stack as a unit against the rest of the document, ordered by consumer composition.
 _Avoid_: z-index, stacking, z-band
 
+### Observability
+
+**Global listener**:
+A consumer-side subscription, via one of the four statics (`onCreate` / `onClose` / `onState` / `onFocus`), that observes an event of every window in the library — including windows created by other code. Each static returns an unsubscribe function, multiple listeners fire in subscription order (library reactions first), and one timing rule holds everywhere: the window's own option callback fires first, then the library's reactions, then the global listener, with the model settled. No-ops fire nothing; geometry is deliberately not observable globally.
+_Avoid_: event bus, global hook, watcher
+
 ### Taskbar
 
 **Taskbar**:
