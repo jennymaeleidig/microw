@@ -2,35 +2,25 @@
 
 ## Unreleased
 
-- **Feature: global focus listener — `MicroW.onFocus`
-  (ticket "03 — focus listener" of the global-listeners spec).** Subscribe
-  once and observe model Focus moving to every window, after the window's
-  own `onfocus` callback and the previous window's `onblur`. Closing a
-  focused window surfaces the hand-off target like any other focus move;
-  blur alone (focus moved to nothing) and raw DOM focus fire nothing
-  (ADR-0010 — model focus directs DOM focus; semantics frozen).
-
-- **Feature: global state listener — `MicroW.onState`
-  (ticket "02 — state listener" of the global-listeners spec).** Subscribe
-  once and observe every state transition of every window — minimize,
-  maximize, restore. The listener receives the window and its settled
-  snapshot (equal to `getState()` at listener time), after the window's own
-  option callback. No-op transitions and gated windows fire nothing.
-
-- **Feature: global lifecycle listeners — `MicroW.onCreate` and
-  `MicroW.onClose`
-  (ticket "01 — lifecycle listeners" of the global-listeners spec).**
-  Subscribe once, statically, and observe every window mount and close —
-  including windows created by other code and bulk teardown via
-  `destroyAll()`. Each static returns an unsubscribe function; multiple
-  listeners fire in subscription order. Timing contract: the window's own
-  `oncreate`/`onclose` option callback fires first, then the library's
-  reactions (projection, taskbar), then the global listener. The membership
-  emit point moved from the registry bookkeeping to after the option
-  callbacks — the one sanctioned change to existing behaviour, with the
-  taskbar's reactions verified unchanged. Geometry is deliberately not
-  observable globally. A throwing listener propagates and aborts teardown
-  mid-way (documented).
+- **Feature: global listeners — `MicroW.onCreate`, `MicroW.onClose`,
+  `MicroW.onState`, `MicroW.onFocus`
+  (tickets "01 — lifecycle listeners", "02 — state listener", and
+  "03 — focus listener" of the global-listeners spec).** Subscribe once,
+  statically, and observe every window in the library — lifecycle, State,
+  and Focus — including windows created by other code and bulk teardown
+  via `destroyAll()`. Each static returns an unsubscribe function;
+  multiple listeners fire in subscription order. Timing contract, one
+  rule everywhere: the window's own option callback fires first, then the
+  library's reactions (projection, taskbar), then the global listener —
+  with the model settled by then (`onState` carries the snapshot;
+  `onCreate` hands you a mounted window). No-ops fire nothing: a gated
+  window's `minimize()`, an already-applied transition, re-focusing the
+  focused window, raw DOM focus, and blur alone. The membership emit
+  point moved from the registry bookkeeping to after the option callbacks
+  — the one sanctioned change to existing behaviour, with the taskbar's
+  reactions verified unchanged. Geometry is deliberately not observable
+  globally. A throwing listener propagates and aborts teardown mid-way
+  (documented).
 
 - **Refactor: the registry's change channel split into three
   (ticket "06 — split the registry's change channel").** Membership

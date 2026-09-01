@@ -543,27 +543,45 @@ geometry — the callback carries it.
 
 ### Global listeners
 
-Where the per-window callbacks above are set once at construction, the
-statics `MicroW.onCreate(listener)`, `MicroW.onClose(listener)`,
-`MicroW.onState(listener)`, and `MicroW.onFocus(listener)` subscribe
-to _every_ window in the library — including windows created by other code.
-Each returns an unsubscribe function; multiple listeners all fire, in
+Where the per-window callbacks above are set once at construction, four
+statics subscribe to _every_ window in the library — including windows
+created by other code:
+
+| Static                      | Listener receives                                | Fires when                                             |
+| --------------------------- | ------------------------------------------------ | ------------------------------------------------------ |
+| `MicroW.onCreate(listener)` | `(win)`                                          | a window mounts                                        |
+| `MicroW.onClose(listener)`  | `(win)`                                          | a window closes (including via `destroyAll()`)         |
+| `MicroW.onState(listener)`  | `(win, snapshot)` — the settled `WindowSnapshot` | a State transition lands (minimize, maximize, restore) |
+| `MicroW.onFocus(listener)`  | `(win)`                                          | model Focus moves to a window                          |
+
+Filter by Root yourself when you care: the listener receives the window,
+and `win.root` tells you where it lives.
+
+**Subscription mechanics.** Every static returns an unsubscribe function;
+unsubscribing twice is inert. Multiple listeners per event all fire, in
 subscription order. A throwing listener propagates (fail loudly) — guard
 your own callbacks, since a throw during construction or `destroy()`
 aborts mid-way (a throwing listener inside `destroyAll()` leaves the
 remaining windows alive).
 
-Timing per event: the window's own option callback fires first, then the
-library's reactions (projection, taskbar), then your global listener. The
-`onCreate` listener sees the window registered and mounted; the `onClose`
-listener runs after the window has left the registry; the `onState`
-listener receives the settled snapshot (equal to `getState()` at listener
-time, computed once at emit), and a no-op transition — an already-minimized window asked to
-minimize, a gated window — fires nothing; focus events fire only when
-model Focus moves to a window — blur alone (focus moved to nothing) and
-raw DOM focus never fire anything (ADR-0010 — model focus directs DOM
-focus). `destroyAll()` fires the same per-window sequence as individual
-`destroy()` calls.
+**Timing guarantees.** One rule everywhere: the window's own option
+callback fires first, then the library's reactions (projection, taskbar),
+then your global listener. Per static:
+
+| Static     | By the time your listener runs                                                                                                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onCreate` | the window is registered and mounted — you may call its public methods immediately                                                                                                              |
+| `onClose`  | the window has left the registry (element removed, taskbar item collapsed)                                                                                                                      |
+| `onState`  | the model and Projection are settled; `snapshot` equals `win.getState()` at that moment (computed once at emit — a listener that mutates windows makes later snapshots on the same event stale) |
+| `onFocus`  | the previous window's `onblur` has already run; the DOM focus was directed (ADR-0010 — model focus directs DOM focus)                                                                           |
+
+Nothing fires on no-ops: an already-minimized window asked to minimize, a
+gated window's `minimize()`, re-focusing the focused window, raw DOM
+focus, and blur alone (Focus moved to nothing) all fire nothing.
+Focus hand-off is an ordinary focus move: when a focused window closes or
+minimizes, the hand-off target surfaces through `onFocus` like any other
+transition. `destroyAll()` fires the same per-window sequence as
+individual `destroy()` calls.
 
 Geometry is deliberately _not_ observable globally — the per-window
 `onmove`/`onresize` callbacks remain the only geometry observers.

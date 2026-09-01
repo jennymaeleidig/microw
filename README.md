@@ -139,6 +139,32 @@ Readonly properties: `root`, `element`, and `minimizable`.
 - `MicroW.configure({ taskbar: false })` — disable minimize/taskbar globally; restores any minimized windows rather than stranding them.
 - `MicroW.setControlLabels({ min, max, close, moveHint, taskbarLabel, untitledWindow })` — set all accessibility copy in one call (English defaults, partial merges, read at render time).
 - `MicroW.cascade({ root?, mode })` — auto-place new windows in `"cascade"` (stepped staircase) or `"random"` (seeded) slots. Default placement only: a window you position explicitly is never rearranged.
+- `MicroW.onCreate(listener)`, `MicroW.onClose(listener)`, `MicroW.onState(listener)`, `MicroW.onFocus(listener)` — global listeners: subscribe once, observe every window's lifecycle, State, and Focus (see below).
+
+### Global listeners
+
+The per-window callbacks are set once at construction. To observe windows
+you did not create — a dialogue runtime branching on a window the player
+closes, a shell tracking app windows — subscribe globally:
+
+```ts
+const unsubscribe = MicroW.onClose((win) => {
+  if (win.root === myRoot && win.getState().title === "Note") {
+    advanceStory("note-read");
+  }
+});
+
+// ...later, when the session ends:
+unsubscribe();
+```
+
+Each static returns an unsubscribe function; multiple listeners all fire.
+Timing is one rule everywhere: the window's own option callback fires
+first, then the library's reactions, then your listener — by then the
+model is settled (`onState` carries the snapshot; `onCreate` hands you a
+mounted window you can call immediately). Full timing guarantees and
+edge cases: [**Global listeners**](docs/reference.md#global-listeners) in
+docs/reference.md.
 
 ## The taskbar
 

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Lifecycle listeners; 02 — State listener; 03 — Focus listener
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] `docs/reference.md` has one "Global listeners" section documenting all four statics, signatures, unsubscribe semantics, and the timing guarantees in one place. (Ticket "01 — lifecycle listeners" already created the two-static stub; extend it rather than replacing it — see its Comments.)
 - [ ] `README.md` carries a short example of the subscribe-once pattern with a narrative-style reaction.
