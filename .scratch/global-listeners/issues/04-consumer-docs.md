@@ -33,11 +33,3 @@
   throw inside `destroyAll()` aborts the loop"; docs now say exactly
   that. The duplicated statics rows in the Statics table were collapsed
   to a pointer into the Global listeners section.
-
-- [ ] `docs/reference.md` has one "Global listeners" section documenting all four statics, signatures, unsubscribe semantics, and the timing guarantees in one place. (Ticket "01 — lifecycle listeners" already created the two-static stub; extend it rather than replacing it — see its Comments.)
-- [ ] `README.md` carries a short example of the subscribe-once pattern with a narrative-style reaction.
-- [ ] The geometry omission is stated as deliberate, not missing.
-- [ ] The timing table records listener ordering within a channel (subscription order; the taskbar subscribes at its creation) and the throw-during-teardown caveat.
-- [ ] Cross-event interleaving on close (focus hand-off before `onclose`) is documented in one sentence.
-- [ ] Changelog sweep: every commit in the feature has its Unreleased entry; the section reads as one feature, not four patches.
-- [ ] Prettier-clean docs (`npx prettier --check`).

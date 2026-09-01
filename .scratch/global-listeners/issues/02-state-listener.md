@@ -31,10 +31,3 @@
   both pinned now (commit "test: pin the min-to-max restore path and
   maximize ordering for onState"); the snapshot doc line notes it is
   computed once at emit.
-
-- [ ] `MicroW.onState(listener)` fires on every transition among `normal`, `min`, and `max`, for every Window regardless of who created it.
-- [ ] The listener receives the Window and its snapshot; the snapshot equals `win.getState()` read at listener time (model and Projection settled — never a half-applied transition).
-- [ ] The window's own option callback (`onminimize`/`onmaximize`/`onrestore`) fires before the global listener for the same transition.
-- [ ] Subscription mechanics (unsubscribe, multi-listener, unsubscribe-function return) behave as established by ticket 01 — covered by reusing its test pattern, not re-proven exhaustively.
-- [ ] Existing 222 tests pass unchanged; new tests subscribe through the public static and drive real windows.
-- [ ] Reference-doc entry for the static and a changelog entry under Unreleased.
