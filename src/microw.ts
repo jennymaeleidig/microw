@@ -16,12 +16,14 @@ import { observeRoot, unobserveRoot } from "./observe.js";
 import {
   nextAutoId,
   notifyFocusChange,
+  notifyFocused,
   notifyRegistered,
   notifyStateChanged,
   notifyStateChange,
   notifyUnregistered,
   onClosed,
   onCreated,
+  onFocused,
   onStateChanged,
   raise,
   register,
@@ -364,7 +366,10 @@ export class MicroW {
     this.element.classList.add("mcrw-focused");
     raise(this);
     this.onfocus?.(this);
+    // The focus emit point: the taskbar reacts first, then the public
+    // listeners — the window's own onfocus has already run by then.
     notifyFocusChange(this);
+    notifyFocused(this);
     return this;
   }
 
@@ -734,6 +739,16 @@ export class MicroW {
     listener: (win: MicroW, snapshot: WindowSnapshot) => void,
   ): () => void {
     return onStateChanged(listener);
+  }
+
+  /**
+   * Subscribes to model Focus moving to every window: the listener fires
+   * after the window's own `onfocus` callback (and the previous window's
+   * `onblur`). Blur alone — focus moved to nothing — fires nothing, and DOM
+   * focus never feeds back (ADR-0010). Returns an unsubscribe function.
+   */
+  static onFocus(listener: (win: MicroW) => void): () => void {
+    return onFocused(listener);
   }
 
   // Validation-and-dispatch facade: the mode check is the consumer contract;

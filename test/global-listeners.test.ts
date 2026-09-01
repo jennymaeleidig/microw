@@ -299,3 +299,127 @@ describe("MicroW global listeners: state", () => {
     expect(onState).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("MicroW global listeners: focus", () => {
+  let seam: Seam;
+  let unsubscribers: Array<() => void>;
+
+  function tracked(subscribe: () => () => void): () => void {
+    const unsub = subscribe();
+    unsubscribers.push(unsub);
+    return unsub;
+  }
+
+  beforeEach(() => {
+    seam = createSeam();
+    unsubscribers = [];
+  });
+
+  afterEach(() => {
+    for (const unsub of unsubscribers.splice(0)) {
+      unsub();
+    }
+    MicroW.destroyAll();
+    seam.cleanup();
+  });
+
+  function root(): HTMLElement {
+    const el = seam.document.createElement("div");
+    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
+    seam.document.body.appendChild(el);
+    return el;
+  }
+
+  it("onFocus fires when model focus moves to a window", () => {
+    const r = root();
+    const focused: MicroW[] = [];
+    tracked(() => MicroW.onFocus((win) => focused.push(win)));
+
+    const a = new MicroW({ root: r });
+    const b = new MicroW({ root: r });
+    a.focus();
+    b.focus();
+
+    expect(focused).toEqual([a, b]);
+  });
+
+  it("closing a focused window surfaces the hand-off target", () => {
+    const r = root();
+    const focused: MicroW[] = [];
+    tracked(() => MicroW.onFocus((win) => focused.push(win)));
+
+    const a = new MicroW({ root: r });
+    const b = new MicroW({ root: r });
+    a.focus();
+    focused.length = 0; // drop the initial focus event
+
+    a.destroy(); // focus hands off to the MRU sibling
+
+    expect(focused).toEqual([b]);
+  });
+
+  it("closing the last focused window fires no spurious focus event", () => {
+    const r = root();
+    const onFocus = vi.fn();
+    tracked(() => MicroW.onFocus(onFocus));
+
+    const win = new MicroW({ root: r });
+    win.focus();
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    win.destroy(); // no window left, no fallback: documented no-op
+    expect(onFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-focusing the focused window (DOM recapture) fires nothing", () => {
+    const r = root();
+    const onFocus = vi.fn();
+    tracked(() => MicroW.onFocus(onFocus));
+
+    const win = new MicroW({ root: r });
+    win.focus();
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    win.focus(); // model already focused: recapture only, no event
+    win.element.focus({ preventScroll: true }); // raw DOM focus: never feeds back
+    expect(onFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it("the option callbacks fire before the global listener (blur of the old, focus of the new)", () => {
+    const r = root();
+    const order: string[] = [];
+    tracked(() =>
+      MicroW.onFocus((win) => order.push(`global:${win.getState().title}`)),
+    );
+
+    const a = new MicroW({
+      root: r,
+      title: "A",
+      onblur: () => order.push("option:blur:A"),
+    });
+    const b = new MicroW({
+      root: r,
+      title: "B",
+      onfocus: () => order.push("option:focus:B"),
+    });
+    a.focus();
+    order.length = 0; // drop A's own focus event pair
+
+    b.focus();
+
+    expect(order).toEqual(["option:blur:A", "option:focus:B", "global:B"]);
+  });
+
+  it("unsubscribing stops delivery", () => {
+    const r = root();
+    const onFocus = vi.fn();
+    const unsub = MicroW.onFocus(onFocus);
+
+    new MicroW({ root: r }).focus();
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    unsub();
+    new MicroW({ root: r }).focus();
+    expect(onFocus).toHaveBeenCalledTimes(1);
+  });
+});

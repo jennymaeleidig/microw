@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Feature: global focus listener — `MicroW.onFocus`
+  (ticket "03 — focus listener" of the global-listeners spec).** Subscribe
+  once and observe model Focus moving to every window, after the window's
+  own `onfocus` callback and the previous window's `onblur`. Closing a
+  focused window surfaces the hand-off target like any other focus move;
+  blur alone (focus moved to nothing) and raw DOM focus fire nothing
+  (ADR-0010, semantics frozen).
+
 - **Feature: global state listener — `MicroW.onState`
   (ticket "02 — state listener" of the global-listeners spec).** Subscribe
   once and observe every state transition of every window — minimize,

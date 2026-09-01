@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Lifecycle listeners (the facade pattern, subscription mechanics, and throwing-listener contract land there)
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] `MicroW.onFocus(listener)` fires when model Focus moves to a Window; the listener receives that Window.
 - [ ] Focus hand-off on close of a focused/minimized window surfaces through the listener exactly like any other Focus change; closing a minimized window with no next target fires no spurious focus event.

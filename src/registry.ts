@@ -85,6 +85,20 @@ const closed = makeChannel<[MicroW]>();
 // never reads a half-applied transition.
 const stateSettled = makeChannel<[MicroW, WindowSnapshot]>();
 
+// The public focus listeners fire when model Focus moves to a window, at
+// their own emit point — after the window's onfocus option callback and the
+// taskbar's reaction. Blur alone (focus moved to nothing) fires nothing, and
+// DOM focus never feeds back (ADR-0010).
+const focusSettled = makeChannel<[MicroW]>();
+
+export function onFocused(listener: ChannelListener): () => void {
+  return focusSettled.subscribe(listener);
+}
+
+export function notifyFocused(win: MicroW): void {
+  focusSettled.notify(win);
+}
+
 export function onStateChanged(
   listener: (win: MicroW, snapshot: WindowSnapshot) => void,
 ): () => void {
