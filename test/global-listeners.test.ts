@@ -299,6 +299,52 @@ describe("MicroW global listeners: focus", () => {
     expect(onFocus).toHaveBeenCalledTimes(1);
   });
 
+  it("closing a minimized window with no next target fires no spurious focus event", () => {
+    const r = root();
+    const onFocus = vi.fn();
+    tracked(() => MicroW.onFocus(onFocus));
+
+    const win = new MicroW({ root: r });
+    win.focus();
+    win.minimize(); // minimize blurs; hand-off runs at minimize time
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    win.destroy(); // already unfocused: no hand-off, no event
+    expect(onFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it("a minimize-driven hand-off surfaces the sibling like any focus change", () => {
+    const r = root();
+    const focused: MicroW[] = [];
+    tracked(() => MicroW.onFocus((win) => focused.push(win)));
+
+    const a = new MicroW({ root: r });
+    const b = new MicroW({ root: r });
+    a.focus();
+    focused.length = 0;
+
+    a.minimize(); // focused window minimizes: sibling wins focus
+
+    expect(focused).toEqual([b]);
+  });
+
+  it("an element fallback target wins focus with no public window event", () => {
+    const r = root();
+    const onFocus = vi.fn();
+    tracked(() => MicroW.onFocus(onFocus));
+
+    const doc = r.ownerDocument!;
+    const fallback = doc.createElement("button");
+    r.appendChild(fallback);
+    const win = new MicroW({ root: r, fallbackFocus: fallback });
+    win.focus();
+    expect(onFocus).toHaveBeenCalledTimes(1);
+
+    win.destroy(); // hands off to the element: not a Window, no event
+    expect(onFocus).toHaveBeenCalledTimes(1);
+    expect(doc.activeElement).toBe(fallback);
+  });
+
   it("re-focusing the focused window (DOM recapture) fires nothing", () => {
     const r = root();
     const onFocus = vi.fn();
