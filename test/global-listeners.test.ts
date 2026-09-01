@@ -1,39 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MicroW } from "../src/index.js";
-import { createSeam } from "./support/seam.js";
-import type { Seam } from "./support/seam.js";
+import { createListenerHarness } from "./support/listeners.js";
 
 describe("MicroW global listeners: lifecycle", () => {
-  let seam: Seam;
-  let unsubscribers: Array<() => void>;
+  const { tracked, setup, cleanup, root } = createListenerHarness();
 
-  // Every subscription in a test is collected here so afterEach tears them
-  // all down — no listener outlives its test.
-  function tracked(subscribe: () => () => void): () => void {
-    const unsub = subscribe();
-    unsubscribers.push(unsub);
-    return unsub;
-  }
+  beforeEach(setup);
 
-  beforeEach(() => {
-    seam = createSeam();
-    unsubscribers = [];
-  });
-
-  afterEach(() => {
-    for (const unsub of unsubscribers.splice(0)) {
-      unsub();
-    }
-    MicroW.destroyAll();
-    seam.cleanup();
-  });
-
-  function root(): HTMLElement {
-    const el = seam.document.createElement("div");
-    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
-    seam.document.body.appendChild(el);
-    return el;
-  }
+  afterEach(cleanup);
 
   it("onCreate fires after the oncreate option callback, with the window registered and mounted", () => {
     const r = root();
@@ -167,34 +141,11 @@ describe("MicroW global listeners: lifecycle", () => {
 });
 
 describe("MicroW global listeners: state", () => {
-  let seam: Seam;
-  let unsubscribers: Array<() => void>;
+  const { tracked, setup, cleanup, root } = createListenerHarness();
 
-  function tracked(subscribe: () => () => void): () => void {
-    const unsub = subscribe();
-    unsubscribers.push(unsub);
-    return unsub;
-  }
+  beforeEach(setup);
 
-  beforeEach(() => {
-    seam = createSeam();
-    unsubscribers = [];
-  });
-
-  afterEach(() => {
-    for (const unsub of unsubscribers.splice(0)) {
-      unsub();
-    }
-    MicroW.destroyAll();
-    seam.cleanup();
-  });
-
-  function root(): HTMLElement {
-    const el = seam.document.createElement("div");
-    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
-    seam.document.body.appendChild(el);
-    return el;
-  }
+  afterEach(cleanup);
 
   it("onState fires for every transition: min, restore, maximize, restore", () => {
     const r = root();
@@ -301,34 +252,11 @@ describe("MicroW global listeners: state", () => {
 });
 
 describe("MicroW global listeners: focus", () => {
-  let seam: Seam;
-  let unsubscribers: Array<() => void>;
+  const { tracked, setup, cleanup, root } = createListenerHarness();
 
-  function tracked(subscribe: () => () => void): () => void {
-    const unsub = subscribe();
-    unsubscribers.push(unsub);
-    return unsub;
-  }
+  beforeEach(setup);
 
-  beforeEach(() => {
-    seam = createSeam();
-    unsubscribers = [];
-  });
-
-  afterEach(() => {
-    for (const unsub of unsubscribers.splice(0)) {
-      unsub();
-    }
-    MicroW.destroyAll();
-    seam.cleanup();
-  });
-
-  function root(): HTMLElement {
-    const el = seam.document.createElement("div");
-    seam.setLayout(el, { x: 0, y: 0, width: 800, height: 600 });
-    seam.document.body.appendChild(el);
-    return el;
-  }
+  afterEach(cleanup);
 
   it("onFocus fires when model focus moves to a window", () => {
     const r = root();

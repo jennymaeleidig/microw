@@ -561,8 +561,9 @@ listener receives the settled snapshot (equal to `getState()` at listener
 time, computed once at emit), and a no-op transition — an already-minimized window asked to
 minimize, a gated window — fires nothing; focus events fire only when
 model Focus moves to a window — blur alone (focus moved to nothing) and
-raw DOM focus never fire anything (ADR-0010). `destroyAll()` fires
-the same per-window sequence as individual `destroy()` calls.
+raw DOM focus never fire anything (ADR-0010 — model focus directs DOM
+focus). `destroyAll()` fires the same per-window sequence as individual
+`destroy()` calls.
 
 Geometry is deliberately _not_ observable globally — the per-window
 `onmove`/`onresize` callbacks remain the only geometry observers.

@@ -8,7 +8,7 @@
   own `onfocus` callback and the previous window's `onblur`. Closing a
   focused window surfaces the hand-off target like any other focus move;
   blur alone (focus moved to nothing) and raw DOM focus fire nothing
-  (ADR-0010, semantics frozen).
+  (ADR-0010 — model focus directs DOM focus; semantics frozen).
 
 - **Feature: global state listener — `MicroW.onState`
   (ticket "02 — state listener" of the global-listeners spec).** Subscribe
