@@ -528,18 +528,17 @@ geometry — the callback carries it.
 
 ### Statics
 
-| Static                                                                                 | Returns           | Meaning                                                                                                                                                                                        |
-| -------------------------------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MicroW.taskbar(root?, options?)`                                                      | `Taskbar \| null` | mount a headless taskbar for a root; `null` when globally disabled.                                                                                                                            |
-| `MicroW.windows(root?)`                                                                | `MicroW[]`        | the live windows of a root (or every window when no root is given).                                                                                                                            |
-| `MicroW.destroyAll()`                                                                  | `number`          | destroy every window (and every taskbar); returns the count.                                                                                                                                   |
-| `MicroW.setControlLabels({ min, max, close, moveHint, taskbarLabel, untitledWindow })` | `void`            | the i18n surface for all accessibility copy; a partial call merges over the English defaults, read at render time.                                                                             |
-| `MicroW.configure({ taskbar })`                                                        | `void`            | global taskbar disable; restores any minimized windows rather than stranding them.                                                                                                             |
-| `MicroW.cascade({ root?, mode })`                                                      | `void`            | auto-place new windows of a root in `"cascade"` or `"random"` slots.                                                                                                                           |
-| `MicroW.onCreate(listener)`                                                            | `() => void`      | global listener: fires once per created window, after its `oncreate` callback, with the window registered and mounted. Returns an unsubscribe function.                                        |
-| `MicroW.onClose(listener)`                                                             | `() => void`      | global listener: fires once per closed window (including via `destroyAll()`), after its `onclose` callback. Returns an unsubscribe function.                                                   |
-| `MicroW.onState(listener)`                                                             | `() => void`      | global listener: fires per state transition (minimize / maximize / restore) with the window and its settled snapshot, after the window's own option callback. Returns an unsubscribe function. |
-| `MicroW.onFocus(listener)`                                                             | `() => void`      | global listener: fires when model Focus moves to a window, after its `onfocus` callback (and the previous window's `onblur`). Returns an unsubscribe function.                                 |
+| Static                                                                                 | Returns           | Meaning                                                                                                            |
+| -------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `MicroW.taskbar(root?, options?)`                                                      | `Taskbar \| null` | mount a headless taskbar for a root; `null` when globally disabled.                                                |
+| `MicroW.windows(root?)`                                                                | `MicroW[]`        | the live windows of a root (or every window when no root is given).                                                |
+| `MicroW.destroyAll()`                                                                  | `number`          | destroy every window (and every taskbar); returns the count.                                                       |
+| `MicroW.setControlLabels({ min, max, close, moveHint, taskbarLabel, untitledWindow })` | `void`            | the i18n surface for all accessibility copy; a partial call merges over the English defaults, read at render time. |
+| `MicroW.configure({ taskbar })`                                                        | `void`            | global taskbar disable; restores any minimized windows rather than stranding them.                                 |
+| `MicroW.cascade({ root?, mode })`                                                      | `void`            | auto-place new windows of a root in `"cascade"` or `"random"` slots.                                               |
+
+The four global-listener statics are documented in
+[**Global listeners**](#global-listeners) below.
 
 ### Global listeners
 
@@ -559,10 +558,12 @@ and `win.root` tells you where it lives.
 
 **Subscription mechanics.** Every static returns an unsubscribe function;
 unsubscribing twice is inert. Multiple listeners per event all fire, in
-subscription order. A throwing listener propagates (fail loudly) — guard
-your own callbacks, since a throw during construction or `destroy()`
-aborts mid-way (a throwing listener inside `destroyAll()` leaves the
-remaining windows alive).
+subscription order — the taskbar subscribes at its creation, so on a
+shared event its reaction always precedes listeners subscribed later
+(the libraries' reactions before yours is also the timing rule below). A
+throwing listener propagates (fail loudly) — guard your own callbacks: a
+throw skips that event's remaining listeners, and a throw inside
+`destroyAll()` aborts the loop, leaving the remaining windows alive.
 
 **Timing guarantees.** One rule everywhere: the window's own option
 callback fires first, then the library's reactions (projection, taskbar),
@@ -580,7 +581,9 @@ gated window's `minimize()`, re-focusing the focused window, raw DOM
 focus, and blur alone (Focus moved to nothing) all fire nothing.
 Focus hand-off is an ordinary focus move: when a focused window closes or
 minimizes, the hand-off target surfaces through `onFocus` like any other
-transition. `destroyAll()` fires the same per-window sequence as
+transition — and on close, that hand-off fires _before_ the closing
+window's own `onclose` option callback and `onClose` listeners.
+`destroyAll()` fires the same per-window sequence as
 individual `destroy()` calls.
 
 Geometry is deliberately _not_ observable globally — the per-window
