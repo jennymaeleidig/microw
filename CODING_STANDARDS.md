@@ -40,5 +40,7 @@ Headless: no inline _static_ CSS — the library writes only its dynamic geometr
 
 ## License
 
-- New code is CC0-1.0 (SPDX `CC0-1.0`); no license header comments required (optional short `// SPDX-License-Identifier: CC0-1.0`).
-- Never copy Apache-2.0-licensed code — derive behavior from the spec.
+- New code is CC0-1.0 (SPDX `CC0-1.0`); no license header comments required
+  (optional short `// SPDX-License-Identifier: CC0-1.0`).
+- Never copy non-CC0-licensed code — derive behavior from the spec and the
+  WAI-ARIA APG pattern.
